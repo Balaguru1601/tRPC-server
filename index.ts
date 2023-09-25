@@ -40,9 +40,7 @@ mongoose
 		console.log(err);
 	});
 
-app.get("/hello", (req, res) => {
-	return res.send("Hello");
-});
+app.get("/hello", (req, res) => res.send("Hello"));
 
 app.use(
 	"/trpc",
