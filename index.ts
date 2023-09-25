@@ -10,6 +10,15 @@ import { ContextType, createContext } from "./context";
 import cookieParser from "cookie-parser";
 import ws from "ws";
 
+declare module "express-session" {
+	export interface SessionData {
+		user: {
+			id: string;
+			username: string;
+		};
+	}
+}
+
 const app = express();
 
 app.use(express.json());
