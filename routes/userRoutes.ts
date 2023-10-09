@@ -38,55 +38,67 @@ const isAuthenticatedUser = trpc.procedure.use(isAuthenticatedUserMiddleware);
 export const userRouter = trpc.router({
 	register: trpc.procedure
 		.input(userTypeObject)
-		.output(z.object({ success: z.boolean(), message: z.string(), user: z.optional(userTypeObject) }))
+		.output(z.object({ success: z.boolean(), message: z.string(), username: z.optional(z.string()) }))
 		.mutation(async ({ ctx, input }) => {
 			try {
 				if (isExpressRequest(ctx)) {
 					const { username, password, email } = input;
 					const existingUser = await userModel.findOne({ username });
-					if (existingUser) {
-						const token = jwt.sign(
-							{ id: existingUser._id, username: existingUser.username },
-							"somesecretkey",
-							{
-								expiresIn: 12 * 60 * 60 * 1000,
-							}
-						);
-						ctx.res.cookie("token", token);
-						return { success: true, message: "User already exists!", user: existingUser };
-					}
-					const hashedPassword = await bcrypt.hash(password, "usethisassalt");
+					if (existingUser) return { success: false, message: "User already exists!" };
+					const hashedPassword = await bcrypt.hash(password, 12);
 					const user = new userModel({
 						username,
 						email,
 						password: hashedPassword,
 					});
 					await user.save();
-					return { success: true, message: "User created successfully!", user: user };
+					return { success: true, message: "User created successfully!", username: user.username };
 				}
 			} catch (e) {
+				console.log(e);
 				return { success: false, message: "Error occured" };
 			}
 			return { success: false, message: "Request not valid" };
 		}),
-	verify: trpc.procedure
+
+	login: trpc.procedure
 		.input(z.object({ username: z.string(), password: z.string() }))
-		.output(z.object({ success: z.boolean(), message: z.string(), user: z.optional(userTypeObject) }))
+		.output(z.object({ success: z.boolean(), message: z.string(), username: z.optional(z.string()) }))
 		.mutation(async ({ ctx, input }) => {
 			const { username, password } = input;
 			try {
-				const user = await userModel.findOne({ username });
-				if (user?.password === password) return { success: true, message: "Verification success", user: user };
-				console.log("in");
 				if (isExpressRequest(ctx)) {
-					ctx.res.cookie("test", "some test value cookie");
-					console.log("cookie set");
+					const user = await userModel.findOne({ username });
+					const hashedPassword = await bcrypt.hash(password, 12);
+					if (user && user.password === hashedPassword) {
+						const token = jwt.sign({ id: user._id, username: user.username }, "somesecretkey", {
+							expiresIn: 12 * 60 * 60 * 1000,
+						});
+						ctx.res.cookie("token", token);
+						return { success: true, message: "Login success", username: user.username };
+					}
 				}
-				throw new Error("failure");
+				throw new Error();
 			} catch (e) {
-				return { success: false, message: "Verification failure" };
+				return { success: false, message: "Login failure! Check credentials." };
 			}
 		}),
+
+	verify: trpc.procedure.query(async ({ ctx }) => {
+		try {
+			if (isExpressRequest(ctx)) {
+				const payload = jwt.verify(ctx.req.cookies("token"), "somesecretkey") as tokenType;
+				const user = await userModel.findById(payload.id);
+				if (!user) throw new Error();
+				return { success: true, message: "Veification success", username: user.username };
+			}
+		} catch (e) {
+			throw new TRPCError({
+				code: "UNAUTHORIZED",
+			});
+		}
+	}),
+
 	secretInfo: isAuthenticatedUser.mutation(({ ctx }) => {
 		return { success: true, message: "This is top secret" };
 	}),
