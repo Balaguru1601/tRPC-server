@@ -8,6 +8,7 @@ import jwt from "jsonwebtoken";
 import { TRPCError } from "@trpc/server";
 
 // const isExpress = (x: any): x is CreateExpressContextOptions =>
+const authSecret = "somesecretkey";
 
 const userTypeObject = z.object({ username: z.string(), password: z.string(), email: z.string() });
 
@@ -19,7 +20,7 @@ interface tokenType {
 const isAuthenticatedUserMiddleware = trpc.middleware(({ ctx, next }) => {
 	try {
 		if (isExpressRequest(ctx)) {
-			const payload = jwt.verify(ctx.req.cookies("token"), "somesecretkey") as tokenType;
+			const payload = jwt.verify(ctx.req.cookies("token"), authSecret) as tokenType;
 			const user = userModel.findById(payload.id);
 			if (!user) throw new Error();
 			ctx.req.session.user = payload;
@@ -69,9 +70,12 @@ export const userRouter = trpc.router({
 			try {
 				if (isExpressRequest(ctx)) {
 					const user = await userModel.findOne({ username });
-					const hashedPassword = await bcrypt.hash(password, 12);
-					if (user && user.password === hashedPassword) {
-						const token = jwt.sign({ id: user._id, username: user.username }, "somesecretkey", {
+					if (!user) {
+						return { success: false, message: "User does not exist" };
+					}
+					const verification = await bcrypt.compare(password, user.password);
+					if (user && verification) {
+						const token = jwt.sign({ id: user._id, username: user.username }, authSecret, {
 							expiresIn: 12 * 60 * 60 * 1000,
 						});
 						ctx.res.cookie("token", token);
@@ -87,7 +91,7 @@ export const userRouter = trpc.router({
 	verify: trpc.procedure.query(async ({ ctx }) => {
 		try {
 			if (isExpressRequest(ctx)) {
-				const payload = jwt.verify(ctx.req.cookies("token"), "somesecretkey") as tokenType;
+				const payload = jwt.verify(ctx.req.cookies("token"), authSecret) as tokenType;
 				const user = await userModel.findById(payload.id);
 				if (!user) throw new Error();
 				return { success: true, message: "Veification success", username: user.username };
