@@ -20,7 +20,7 @@ interface tokenType {
 const isAuthenticatedUserMiddleware = trpc.middleware(({ ctx, next }) => {
 	try {
 		if (isExpressRequest(ctx)) {
-			const payload = jwt.verify(ctx.req.cookies("token"), authSecret) as tokenType;
+			const payload = jwt.verify(ctx.req.cookies.token, authSecret) as tokenType;
 			const user = userModel.findById(payload.id);
 			if (!user) throw new Error();
 			ctx.req.session.user = payload;
@@ -28,6 +28,7 @@ const isAuthenticatedUserMiddleware = trpc.middleware(({ ctx, next }) => {
 		}
 		throw new Error();
 	} catch (e) {
+		console.log(e);
 		throw new TRPCError({
 			code: "UNAUTHORIZED",
 		});
@@ -53,6 +54,10 @@ export const userRouter = trpc.router({
 						password: hashedPassword,
 					});
 					await user.save();
+					const token = jwt.sign({ id: user._id, username: user.username }, authSecret, {
+						expiresIn: 12 * 60 * 60 * 1000,
+					});
+					ctx.res.cookie("token", token);
 					return { success: true, message: "User created successfully!", username: user.username };
 				}
 			} catch (e) {
@@ -99,11 +104,20 @@ export const userRouter = trpc.router({
 		} catch (e) {
 			throw new TRPCError({
 				code: "UNAUTHORIZED",
+				message: "Verification failure!",
 			});
 		}
 	}),
+	logout: isAuthenticatedUser.mutation(({ ctx }) => {
+		try {
+			ctx.res.clearCookie("token");
+			return { success: true, message: "Logout success!" };
+		} catch (error) {
+			return { success: false, message: "Logout failure!" };
+		}
+	}),
 
-	secretInfo: isAuthenticatedUser.mutation(({ ctx }) => {
+	secretInfo: isAuthenticatedUser.query(({ ctx }) => {
 		return { success: true, message: "This is top secret" };
 	}),
 });
