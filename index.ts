@@ -3,10 +3,9 @@ import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { applyWSSHandler } from "@trpc/server/adapters/ws";
 import cors from "cors";
-import mongoose from "mongoose";
 import { appRouter } from "./routes/AppRoutes";
 import session from "express-session";
-import { ContextType, createContext } from "./context";
+import { createContext } from "./context";
 import cookieParser from "cookie-parser";
 import ws from "ws";
 
@@ -39,16 +38,6 @@ app.use(
 	})
 );
 
-mongoose
-	.connect("mongodb://127.0.0.1:27017/ApiTesting")
-	.then(() => {
-		console.log("MONGO CONNECTION OPEN!!!");
-	})
-	.catch((err) => {
-		console.log("OH NO MONGO ERROR!!!!");
-		console.log(err);
-	});
-
 app.get("/hello", (req, res) => res.send("Hello"));
 
 app.use(
@@ -59,7 +48,7 @@ app.use(
 	})
 );
 
-const server = app.listen(8080);
+const server = app.listen(8080, () => console.log("listening at 8080"));
 
 applyWSSHandler({
 	wss: new ws.Server({ server }),

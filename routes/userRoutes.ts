@@ -6,6 +6,9 @@ import { z } from "zod";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { TRPCError } from "@trpc/server";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
 
 // const isExpress = (x: any): x is CreateExpressContextOptions =>
 const authSecret = "somesecretkey";
@@ -14,16 +17,15 @@ const userTypeObject = z.object({ username: z.string(), password: z.string(), em
 
 interface tokenType {
 	username: string;
-	id: string;
+	id: number;
 }
 
-const isAuthenticatedUserMiddleware = trpc.middleware(({ ctx, next }) => {
+const isAuthenticatedUserMiddleware = trpc.middleware(async ({ ctx, next }) => {
 	try {
 		if (isExpressRequest(ctx)) {
 			const payload = jwt.verify(ctx.req.cookies.token, authSecret) as tokenType;
-			const user = userModel.findById(payload.id);
+			const user = await prisma.user.findFirst({ where: { id: payload.id } });
 			if (!user) throw new Error();
-			ctx.req.session.user = payload;
 			return next({ ctx });
 		}
 		throw new Error();
@@ -45,16 +47,28 @@ export const userRouter = trpc.router({
 			try {
 				if (isExpressRequest(ctx)) {
 					const { username, password, email } = input;
-					const existingUser = await userModel.findOne({ username });
-					if (existingUser) return { success: false, message: "User already exists!" };
-					const hashedPassword = await bcrypt.hash(password, 12);
-					const user = new userModel({
-						username,
-						email,
-						password: hashedPassword,
+
+					const existingUsername = await prisma.user.findFirst({
+						where: {
+							username,
+						},
 					});
-					await user.save();
-					const token = jwt.sign({ id: user._id, username: user.username }, authSecret, {
+					if (existingUsername) return { success: false, message: "Username already exists!" };
+
+					const existingEmail = await prisma.user.findFirst({
+						where: { email },
+					});
+					if (existingEmail) return { success: false, message: "Email already exists!" };
+
+					const hashedPassword = await bcrypt.hash(password, 12);
+					const user = await prisma.user.create({
+						data: {
+							username,
+							email,
+							password: hashedPassword,
+						},
+					});
+					const token = jwt.sign({ id: user.id, username: user.username }, authSecret, {
 						expiresIn: 12 * 60 * 60 * 1000,
 					});
 					ctx.res.cookie("token", token);
@@ -74,13 +88,18 @@ export const userRouter = trpc.router({
 			const { username, password } = input;
 			try {
 				if (isExpressRequest(ctx)) {
-					const user = await userModel.findOne({ username });
+					const user = await prisma.user.findFirst({
+						where: {
+							username,
+						},
+					});
 					if (!user) {
 						return { success: false, message: "User does not exist" };
 					}
+
 					const verification = await bcrypt.compare(password, user.password);
 					if (user && verification) {
-						const token = jwt.sign({ id: user._id, username: user.username }, authSecret, {
+						const token = jwt.sign({ id: user.id, username: user.username }, authSecret, {
 							expiresIn: 12 * 60 * 60 * 1000,
 						});
 						ctx.res.cookie("token", token);
@@ -97,7 +116,7 @@ export const userRouter = trpc.router({
 		try {
 			if (isExpressRequest(ctx)) {
 				const payload = jwt.verify(ctx.req.cookies("token"), authSecret) as tokenType;
-				const user = await userModel.findById(payload.id);
+				const user = await prisma.user.findFirst({ where: { id: payload.id } });
 				if (!user) throw new Error();
 				return { success: true, message: "Veification success", username: user.username };
 			}
@@ -108,6 +127,7 @@ export const userRouter = trpc.router({
 			});
 		}
 	}),
+
 	logout: isAuthenticatedUser.mutation(({ ctx }) => {
 		try {
 			ctx.res.clearCookie("token");
