@@ -115,7 +115,7 @@ export const userRouter = trpc.router({
 	verify: trpc.procedure.query(async ({ ctx }) => {
 		try {
 			if (isExpressRequest(ctx)) {
-				const payload = jwt.verify(ctx.req.cookies("token"), authSecret) as tokenType;
+				const payload = jwt.verify(ctx.req.cookies.token, authSecret) as tokenType;
 				const user = await prisma.user.findFirst({ where: { id: payload.id } });
 				if (!user) throw new Error();
 				return { success: true, message: "Veification success", username: user.username };
