@@ -1,6 +1,7 @@
 import { trpc } from "../trpc";
 import { z } from "zod";
 import { userRouter } from "./userRoutes";
+import { messageRouter } from "./messageRoutes";
 
 export const appRouter = trpc.router({
 	greeting: trpc.procedure.query(() => "Hello user!"),
@@ -9,6 +10,7 @@ export const appRouter = trpc.router({
 		return true;
 	}),
 	user: userRouter,
+	message: messageRouter,
 });
 
 export type AppRouter = typeof appRouter;

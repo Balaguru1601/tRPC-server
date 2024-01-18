@@ -1,48 +1,33 @@
 import { isExpressRequest } from "../context";
-import { userModel } from "../models/user";
 import { trpc } from "../trpc";
-import { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import { z } from "zod";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { TRPCError } from "@trpc/server";
 import { PrismaClient } from "@prisma/client";
+import { observable } from "@trpc/server/observable";
+import { isAuthenticatedUser } from "./middlewares";
+import { authTokenType, extractToken } from "../utils/extractToken";
+import { redis } from "../redis";
+import { eventEmitter } from "../constants/events";
 
 const prisma = new PrismaClient();
 
-// const isExpress = (x: any): x is CreateExpressContextOptions =>
 const authSecret = "somesecretkey";
 
 const userTypeObject = z.object({ username: z.string(), password: z.string(), email: z.string() });
 
-interface tokenType {
-	username: string;
-	id: number;
-}
-
-const isAuthenticatedUserMiddleware = trpc.middleware(async ({ ctx, next }) => {
-	try {
-		if (isExpressRequest(ctx)) {
-			const payload = jwt.verify(ctx.req.cookies.token, authSecret) as tokenType;
-			const user = await prisma.user.findFirst({ where: { id: payload.id } });
-			if (!user) throw new Error();
-			return next({ ctx });
-		}
-		throw new Error();
-	} catch (e) {
-		console.log(e);
-		throw new TRPCError({
-			code: "UNAUTHORIZED",
-		});
-	}
+const authOutputSchema = z.object({
+	success: z.boolean(),
+	message: z.string(),
+	username: z.optional(z.string()),
+	userId: z.optional(z.number()),
 });
-
-const isAuthenticatedUser = trpc.procedure.use(isAuthenticatedUserMiddleware);
 
 export const userRouter = trpc.router({
 	register: trpc.procedure
 		.input(userTypeObject)
-		.output(z.object({ success: z.boolean(), message: z.string(), username: z.optional(z.string()) }))
+		.output(authOutputSchema)
 		.mutation(async ({ ctx, input }) => {
 			try {
 				if (isExpressRequest(ctx)) {
@@ -72,7 +57,14 @@ export const userRouter = trpc.router({
 						expiresIn: 12 * 60 * 60 * 1000,
 					});
 					ctx.res.cookie("token", token);
-					return { success: true, message: "User created successfully!", username: user.username };
+					// await redis.sadd<number>("users:online", user.id);
+					redis.sadd("users:online", user.id);
+					return {
+						success: true,
+						message: "User created successfully!",
+						username: user.username,
+						userId: user.id,
+					};
 				}
 			} catch (e) {
 				console.log(e);
@@ -83,7 +75,7 @@ export const userRouter = trpc.router({
 
 	login: trpc.procedure
 		.input(z.object({ username: z.string(), password: z.string() }))
-		.output(z.object({ success: z.boolean(), message: z.string(), username: z.optional(z.string()) }))
+		.output(authOutputSchema)
 		.mutation(async ({ ctx, input }) => {
 			const { username, password } = input;
 			try {
@@ -103,7 +95,8 @@ export const userRouter = trpc.router({
 							expiresIn: 12 * 60 * 60 * 1000,
 						});
 						ctx.res.cookie("token", token);
-						return { success: true, message: "Login success", username: user.username };
+						redis.sadd("users:online", user.id);
+						return { success: true, message: "Login success", username: user.username, userId: user.id };
 					}
 				}
 				throw new Error();
@@ -115,10 +108,11 @@ export const userRouter = trpc.router({
 	verify: trpc.procedure.query(async ({ ctx }) => {
 		try {
 			if (isExpressRequest(ctx)) {
-				const payload = jwt.verify(ctx.req.cookies.token, authSecret) as tokenType;
+				const payload = extractToken(ctx.req.cookies.token, "auth") as authTokenType;
 				const user = await prisma.user.findFirst({ where: { id: payload.id } });
+				if (payload.id) redis.srem("users:online", payload.id);
 				if (!user) throw new Error();
-				return { success: true, message: "Veification success", username: user.username };
+				return { success: true, message: "Veification success", username: user.username, userId: user.id };
 			}
 		} catch (e) {
 			throw new TRPCError({
@@ -131,6 +125,9 @@ export const userRouter = trpc.router({
 	logout: isAuthenticatedUser.mutation(({ ctx }) => {
 		try {
 			ctx.res.clearCookie("token");
+			const payload = extractToken(ctx.req.cookies.token, "auth") as authTokenType;
+			redis.srem("users:online", payload.id);
+
 			return { success: true, message: "Logout success!" };
 		} catch (error) {
 			return { success: false, message: "Logout failure!" };
@@ -140,4 +137,50 @@ export const userRouter = trpc.router({
 	secretInfo: isAuthenticatedUser.query(({ ctx }) => {
 		return { success: true, message: "This is top secret" };
 	}),
+
+	update: trpc.procedure.subscription(() => {
+		return observable<string>((emit) => {
+			console.log("emit");
+			eventEmitter.on("update", emit.next);
+			return () => {
+				eventEmitter.off("update", emit.next);
+			};
+		});
+	}),
+
+	getOnlineUsers: isAuthenticatedUser
+		.output(
+			z.object({
+				success: z.boolean(),
+				message: z.string(),
+				users: z.optional(
+					z.array(
+						z.object({
+							username: z.string(),
+							id: z.number(),
+						})
+					)
+				),
+			})
+		)
+		.query(async () => {
+			await redis.smembers("users:online", (err, onlineUsers) => {
+				if (err) {
+					return { success: false, message: "Failed to get online users!" };
+				} else {
+					if (onlineUsers && onlineUsers.length > 0) {
+						// onlineUsers.
+						// const array: number[] = [...onlineUsers]
+						// const users = await prisma.user.findMany({
+						//     where: {
+						//     id: {in: onlineUsers }
+						// }})
+						console.log(onlineUsers);
+						return { success: true, message: "Failed to get online users!" };
+					}
+				}
+				return { success: false, message: "Failed to get online users!" };
+			});
+			return { success: false, message: "Failed to get online users!" };
+		}),
 });

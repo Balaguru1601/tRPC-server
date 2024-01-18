@@ -50,8 +50,29 @@ app.use(
 
 const server = app.listen(8080, () => console.log("listening at 8080"));
 
-applyWSSHandler({
-	wss: new ws.Server({ server }),
+const wss = new ws.WebSocketServer({ server });
+
+wss.on("connection", () => {
+	console.log("-- ws connection established --", wss.clients.size);
+});
+
+wss.on("close", () => {
+	console.log("-- ws connection closed --", wss.clients.size);
+	wss.close();
+});
+
+const handler = applyWSSHandler({
+	wss,
 	router: appRouter,
 	createContext,
 });
+
+process.on("SIGTERM", () => {
+	console.log("SIGTERM");
+
+	handler.broadcastReconnectNotification();
+
+	wss.close();
+});
+
+process.on("warning", (e) => console.warn(e.stack));

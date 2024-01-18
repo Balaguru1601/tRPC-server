@@ -13,4 +13,8 @@ export const isExpressRequest = (ctx: ContextType): ctx is CreateExpressContextO
 	return (ctx as CreateExpressContextOptions).req.session !== undefined;
 };
 
+export const isWSRequest = (ctx: ContextType): ctx is CreateWSSContextFnOptions => {
+	return (ctx as CreateExpressContextOptions).req.session === undefined;
+};
+
 export type ContextType = inferAsyncReturnType<typeof createContext>;
