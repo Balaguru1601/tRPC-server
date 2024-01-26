@@ -13,6 +13,8 @@ const userTypeObject = z.object({ username: z.string(), password: z.string(), em
 const isAuthenticatedUserMiddleware = trpc.middleware(async ({ ctx, next }) => {
 	try {
 		if (isExpressRequest(ctx)) {
+			const token = ctx.req.cookies.token;
+			if (!token) throw new Error();
 			const payload = extractToken(ctx.req.cookies.token, "auth") as authTokenType;
 			const user = await prisma.user.findFirst({ where: { id: payload.id } });
 			if (!user) throw new Error();
@@ -24,15 +26,23 @@ const isAuthenticatedUserMiddleware = trpc.middleware(async ({ ctx, next }) => {
 		throw new TRPCError({
 			code: "UNAUTHORIZED",
 		});
+		// return {success: false}
 	}
 });
 
 const wsRequestMiddleware = trpc.middleware(({ ctx, next }) => {
-	if (isWSRequest(ctx)) return next({ ctx });
-	else
+	try {
+		if (isWSRequest(ctx)) return next({ ctx });
+		else
+			throw new TRPCError({
+				code: "UNAUTHORIZED",
+			});
+	} catch (e) {
+		console.log(e);
 		throw new TRPCError({
 			code: "UNAUTHORIZED",
 		});
+	}
 });
 
 export const isAuthenticatedUser = trpc.procedure.use(isAuthenticatedUserMiddleware);

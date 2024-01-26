@@ -58,7 +58,8 @@ export const userRouter = trpc.router({
 					});
 					ctx.res.cookie("token", token);
 					// await redis.sadd<number>("users:online", user.id);
-					redis.sadd("users:online", user.id);
+					const v = await redis.sadd("users:online", user.id);
+
 					return {
 						success: true,
 						message: "User created successfully!",
@@ -110,8 +111,12 @@ export const userRouter = trpc.router({
 			if (isExpressRequest(ctx)) {
 				const payload = extractToken(ctx.req.cookies.token, "auth") as authTokenType;
 				const user = await prisma.user.findFirst({ where: { id: payload.id } });
-				if (payload.id) redis.srem("users:online", payload.id);
 				if (!user) throw new Error();
+				redis.sismember("users:online", user.id, (err, isOnline) => {
+					if (err || isOnline === 0) {
+						redis.sadd("users:online", user.id);
+					}
+				});
 				return { success: true, message: "Veification success", username: user.username, userId: user.id };
 			}
 		} catch (e) {
@@ -122,15 +127,20 @@ export const userRouter = trpc.router({
 		}
 	}),
 
-	logout: isAuthenticatedUser.mutation(({ ctx }) => {
-		try {
-			ctx.res.clearCookie("token");
-			const payload = extractToken(ctx.req.cookies.token, "auth") as authTokenType;
-			redis.srem("users:online", payload.id);
+	logout: trpc.procedure.mutation(({ ctx }) => {
+		if (isExpressRequest(ctx)) {
+			try {
+				const token = ctx.req.cookies.token;
+				const payload = extractToken(token, "auth") as authTokenType;
+				redis.srem("users:online", payload.id);
+				ctx.res.clearCookie("token");
 
-			return { success: true, message: "Logout success!" };
-		} catch (error) {
-			return { success: false, message: "Logout failure!" };
+				return { success: true, message: "Logout success!" };
+			} catch (error) {
+				return { success: false, message: "Logout failure!" };
+			}
+		} else {
+			return { success: false, message: "Unauthorized request!" };
 		}
 	}),
 
@@ -140,7 +150,6 @@ export const userRouter = trpc.router({
 
 	update: trpc.procedure.subscription(() => {
 		return observable<string>((emit) => {
-			console.log("emit");
 			eventEmitter.on("update", emit.next);
 			return () => {
 				eventEmitter.off("update", emit.next);
@@ -163,24 +172,36 @@ export const userRouter = trpc.router({
 				),
 			})
 		)
-		.query(async () => {
-			await redis.smembers("users:online", (err, onlineUsers) => {
+		.query(async ({ ctx }) => {
+			// return observable<{ username: string, userId: number }[]>((emit) => {
+			//     try {
+			//         function onlineUsers(data: { username: string; userId: number }[]) {
+
+			//         }
+			//     } catch (error) {
+
+			//     }
+			// })
+			const onlineUsers = await redis.smembers("users:online", async (err, onlineUsers) => {
 				if (err) {
 					return { success: false, message: "Failed to get online users!" };
 				} else {
-					if (onlineUsers && onlineUsers.length > 0) {
-						// onlineUsers.
-						// const array: number[] = [...onlineUsers]
-						// const users = await prisma.user.findMany({
-						//     where: {
-						//     id: {in: onlineUsers }
-						// }})
-						console.log(onlineUsers);
-						return { success: true, message: "Failed to get online users!" };
-					}
+					return onlineUsers;
 				}
-				return { success: false, message: "Failed to get online users!" };
 			});
+			if (onlineUsers && onlineUsers.length > 0) {
+				try {
+					const userIds: number[] = Array.from(onlineUsers, (x) => +x);
+					const users = await prisma.user.findMany({
+						where: {
+							id: { in: userIds, not: 2 },
+						},
+					});
+					return { success: true, message: "Successfully got online users!", users };
+				} catch (e) {
+					return { success: false, message: "Failed to get online users!" };
+				}
+			}
 			return { success: false, message: "Failed to get online users!" };
 		}),
 });

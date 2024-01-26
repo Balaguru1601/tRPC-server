@@ -8,6 +8,7 @@ import session from "express-session";
 import { createContext } from "./context";
 import cookieParser from "cookie-parser";
 import ws from "ws";
+import { redis } from "./redis";
 
 declare module "express-session" {
 	export interface SessionData {
@@ -52,13 +53,11 @@ const server = app.listen(8080, () => console.log("listening at 8080"));
 
 const wss = new ws.WebSocketServer({ server });
 
-wss.on("connection", () => {
-	console.log("-- ws connection established --", wss.clients.size);
-});
-
-wss.on("close", () => {
-	console.log("-- ws connection closed --", wss.clients.size);
-	wss.close();
+wss.on("connection", (ws) => {
+	console.log(`➕➕ Connection (${wss.clients.size})`);
+	ws.once("close", () => {
+		console.log(`➖➖ Connection (${wss.clients.size})`);
+	});
 });
 
 const handler = applyWSSHandler({
@@ -68,11 +67,17 @@ const handler = applyWSSHandler({
 });
 
 process.on("SIGTERM", () => {
-	console.log("SIGTERM");
-
 	handler.broadcastReconnectNotification();
-
 	wss.close();
+	redis.quit();
+	server.close();
+});
+
+process.on("SIGINT", () => {
+	handler.broadcastReconnectNotification();
+	wss.close();
+	redis.quit();
+	server.close();
 });
 
 process.on("warning", (e) => console.warn(e.stack));
