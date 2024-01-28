@@ -4,30 +4,28 @@ import { z } from "zod";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { TRPCError } from "@trpc/server";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, User } from "@prisma/client";
 import { observable } from "@trpc/server/observable";
 import { isAuthenticatedUser } from "./middlewares";
 import { authTokenType, extractToken } from "../utils/extractToken";
 import { redis } from "../redis";
 import { eventEmitter } from "../constants/events";
+import {
+	AuthOutput,
+	OnlineUsersOutput,
+	UserLoginObject,
+	UserRegisterObject,
+	UserTypeObject,
+} from "../constants/userTypes";
 
 const prisma = new PrismaClient();
 
 const authSecret = "somesecretkey";
 
-const userTypeObject = z.object({ username: z.string(), password: z.string(), email: z.string() });
-
-const authOutputSchema = z.object({
-	success: z.boolean(),
-	message: z.string(),
-	username: z.optional(z.string()),
-	userId: z.optional(z.number()),
-});
-
 export const userRouter = trpc.router({
 	register: trpc.procedure
-		.input(userTypeObject)
-		.output(authOutputSchema)
+		.input(UserRegisterObject)
+		.output(AuthOutput)
 		.mutation(async ({ ctx, input }) => {
 			try {
 				if (isExpressRequest(ctx)) {
@@ -75,17 +73,25 @@ export const userRouter = trpc.router({
 		}),
 
 	login: trpc.procedure
-		.input(z.object({ username: z.string(), password: z.string() }))
-		.output(authOutputSchema)
+		.input(UserLoginObject)
+		.output(AuthOutput)
 		.mutation(async ({ ctx, input }) => {
 			const { username, password } = input;
 			try {
 				if (isExpressRequest(ctx)) {
-					const user = await prisma.user.findFirst({
-						where: {
-							username,
-						},
-					});
+					let user: UserTypeObject | null = null;
+					if (input.withUsername)
+						user = await prisma.user.findFirst({
+							where: {
+								username,
+							},
+						});
+					else
+						user = await prisma.user.findFirst({
+							where: {
+								email: username,
+							},
+						});
 					if (!user) {
 						return { success: false, message: "User does not exist" };
 					}
@@ -127,7 +133,7 @@ export const userRouter = trpc.router({
 		}
 	}),
 
-	logout: trpc.procedure.mutation(({ ctx }) => {
+	logout: trpc.procedure.output(AuthOutput).mutation(({ ctx }) => {
 		if (isExpressRequest(ctx)) {
 			try {
 				const token = ctx.req.cookies.token;
@@ -157,51 +163,45 @@ export const userRouter = trpc.router({
 		});
 	}),
 
-	getOnlineUsers: isAuthenticatedUser
-		.output(
-			z.object({
-				success: z.boolean(),
-				message: z.string(),
-				users: z.optional(
-					z.array(
-						z.object({
-							username: z.string(),
-							id: z.number(),
-						})
-					)
-				),
-			})
-		)
-		.query(async ({ ctx }) => {
-			// return observable<{ username: string, userId: number }[]>((emit) => {
-			//     try {
-			//         function onlineUsers(data: { username: string; userId: number }[]) {
+	getOnlineUsers: isAuthenticatedUser.output(OnlineUsersOutput).query(async ({ ctx }) => {
+		// return observable<{ username: string, userId: number }[]>((emit) => {
+		//     try {
+		//         function onlineUsers(data: { username: string; userId: number }[]) {
 
-			//         }
-			//     } catch (error) {
+		//         }
+		//     } catch (error) {
 
-			//     }
-			// })
-			const onlineUsers = await redis.smembers("users:online", async (err, onlineUsers) => {
-				if (err) {
-					return { success: false, message: "Failed to get online users!" };
-				} else {
-					return onlineUsers;
-				}
-			});
-			if (onlineUsers && onlineUsers.length > 0) {
-				try {
-					const userIds: number[] = Array.from(onlineUsers, (x) => +x);
-					const users = await prisma.user.findMany({
-						where: {
-							id: { in: userIds, not: 2 },
-						},
-					});
-					return { success: true, message: "Successfully got online users!", users };
-				} catch (e) {
-					return { success: false, message: "Failed to get online users!" };
-				}
+		//     }
+		// })
+		const user = ctx.req.body.user as User;
+		const onlineUsers = await redis.smembers("users:online", async (err, onlineUsers) => {
+			if (err) {
+				return { success: false, message: "Failed to get online users!" };
+			} else {
+				return onlineUsers;
 			}
-			return { success: false, message: "Failed to get online users!" };
-		}),
+		});
+		if (onlineUsers && onlineUsers.length > 0) {
+			try {
+				const userIds: number[] = Array.from(onlineUsers, (x) => +x);
+				const users = await prisma.user.findMany({
+					where: {
+						id: { in: userIds, not: 2 },
+					},
+				});
+				prisma.individualMessage.updateMany({
+					where: {
+						recipientId: user.id,
+					},
+					data: {
+						receivedAt: new Date(),
+					},
+				});
+				return { success: true, message: "Successfully got online users!", users };
+			} catch (e) {
+				return { success: false, message: "Failed to get online users!" };
+			}
+		}
+		return { success: false, message: "Failed to get online users!" };
+	}),
 });

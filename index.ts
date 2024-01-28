@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import cookieParser from "cookie-parser";
 import ws from "ws";
 import { redis } from "./redis";
+import { PrismaClient } from "@prisma/client";
 
 declare module "express-session" {
 	export interface SessionData {
@@ -20,6 +21,8 @@ declare module "express-session" {
 }
 
 const app = express();
+
+export const prisma = new PrismaClient();
 
 app.use(express.json());
 app.use(cookieParser());

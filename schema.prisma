@@ -3,35 +3,47 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url = env("DATABASE_URL")
-  relationMode = "prisma"
-}
-
-model WordList {
-  id        Int        @id @default(autoincrement())
-  createdAt DateTime   @default(now())
-  word      String     @unique @db.VarChar(50)
-  meaning   String     @db.VarChar(255)
-  hint      String?    @db.VarChar(400)
-  synonyms  Synonyms[]
-  isMarked  Boolean    @default(false)
-}
-
-model Synonyms {
-  id    Int       @id @default(autoincrement())
-  word  String    @db.VarChar(50)
-  ref   WordList? @relation(fields: [refId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  refId Int
-
-  @@index([refId])
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
-  id    Int     @id @default(autoincrement())
-  email String  @unique
-  username String  @unique
-  password String
+  id              Int              @id @default(autoincrement())
+  email           String           @unique
+  username        String           @unique
+  password        String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  individualChats IndividualChat[]
 
-  @@map("trpc_standalone_user")
+  @@map("chatapp_user")
+}
+
+model IndividualChat {
+  id       String              @id @default(cuid())
+  Messages IndividualMessage[]
+  Users    User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("chatapp_individualchat")
+}
+
+model IndividualMessage {
+  id          String         @id @default(cuid())
+  sentAt      DateTime
+  message     String
+  chatId      String
+  chat        IndividualChat @relation(fields: [chatId], references: [id])
+  senderId    Int
+  recipientId Int
+  viewed      Boolean        @default(false)
+  receivedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("chatapp_individualmessage")
 }

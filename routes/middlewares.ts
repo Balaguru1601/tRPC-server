@@ -18,6 +18,7 @@ const isAuthenticatedUserMiddleware = trpc.middleware(async ({ ctx, next }) => {
 			const payload = extractToken(ctx.req.cookies.token, "auth") as authTokenType;
 			const user = await prisma.user.findFirst({ where: { id: payload.id } });
 			if (!user) throw new Error();
+			ctx.req.body.user = user;
 			return next({ ctx });
 		}
 		throw new Error();
