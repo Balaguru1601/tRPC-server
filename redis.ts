@@ -3,6 +3,8 @@ require("dotenv").config();
 
 export const redis = new Redis(process.env.REDIS_URL!);
 
+export const onlineUsersKey = "users:online";
+
 // Listen to 'error' events to the Redis connection
 redis.on("error", (error: any) => {
 	if (error.code && error.code === "ECONNRESET") {

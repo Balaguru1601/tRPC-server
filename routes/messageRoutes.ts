@@ -11,7 +11,7 @@ import { isAuthenticatedUser, isWsRequest } from "./middlewares";
 import { authTokenType, extractToken } from "../utils/extractToken";
 import { Events, eventEmitter } from "../constants/events";
 import { observable } from "@trpc/server/observable";
-import { redis } from "../redis";
+import { onlineUsersKey, redis } from "../redis";
 
 import { User } from "@prisma/client";
 import { prisma } from "..";
@@ -38,7 +38,7 @@ export const messageRouter = trpc.router({
 					senderId: user.id,
 					viewed: false,
 				};
-				const isReceiverOnline = await redis.sismember("users:online", message.recipientId);
+				const isReceiverOnline = await redis.sismember(onlineUsersKey, message.recipientId);
 				if (isReceiverOnline) {
 					message.receivedAt = new Date();
 					eventEmitter.emit(Events.SEND_MESSAGE, message);

@@ -8,7 +8,7 @@ import { PrismaClient, User } from "@prisma/client";
 import { observable } from "@trpc/server/observable";
 import { isAuthenticatedUser } from "./middlewares";
 import { authTokenType, extractToken } from "../utils/extractToken";
-import { redis } from "../redis";
+import { onlineUsersKey, redis } from "../redis";
 import { eventEmitter } from "../constants/events";
 import {
 	AuthOutput,
@@ -55,8 +55,8 @@ export const userRouter = trpc.router({
 						expiresIn: 12 * 60 * 60 * 1000,
 					});
 					ctx.res.cookie("token", token);
-					// await redis.sadd<number>("users:online", user.id);
-					const v = await redis.sadd("users:online", user.id);
+					// await redis.sadd<number>(onlineUsersKey, user.id);
+					const v = await redis.sadd(onlineUsersKey, user.id);
 
 					return {
 						success: true,
@@ -102,7 +102,7 @@ export const userRouter = trpc.router({
 							expiresIn: 12 * 60 * 60 * 1000,
 						});
 						ctx.res.cookie("token", token);
-						redis.sadd("users:online", user.id);
+						redis.sadd(onlineUsersKey, user.id);
 						return { success: true, message: "Login success", username: user.username, userId: user.id };
 					}
 				}
@@ -118,9 +118,9 @@ export const userRouter = trpc.router({
 				const payload = extractToken(ctx.req.cookies.token, "auth") as authTokenType;
 				const user = await prisma.user.findFirst({ where: { id: payload.id } });
 				if (!user) throw new Error();
-				redis.sismember("users:online", user.id, (err, isOnline) => {
+				redis.sismember(onlineUsersKey, user.id, (err, isOnline) => {
 					if (err || isOnline === 0) {
-						redis.sadd("users:online", user.id);
+						redis.sadd(onlineUsersKey, user.id);
 					}
 				});
 				return { success: true, message: "Veification success", username: user.username, userId: user.id };
@@ -138,7 +138,7 @@ export const userRouter = trpc.router({
 			try {
 				const token = ctx.req.cookies.token;
 				const payload = extractToken(token, "auth") as authTokenType;
-				redis.srem("users:online", payload.id);
+				redis.srem(onlineUsersKey, payload.id);
 				ctx.res.clearCookie("token");
 
 				return { success: true, message: "Logout success!" };
@@ -174,7 +174,7 @@ export const userRouter = trpc.router({
 		//     }
 		// })
 		const user = ctx.req.body.user as User;
-		const onlineUsers = await redis.smembers("users:online", async (err, onlineUsers) => {
+		const onlineUsers = await redis.smembers(onlineUsersKey, async (err, onlineUsers) => {
 			if (err) {
 				return { success: false, message: "Failed to get online users!" };
 			} else {
@@ -203,5 +203,15 @@ export const userRouter = trpc.router({
 			}
 		}
 		return { success: false, message: "Failed to get online users!" };
+	}),
+
+	setUserOffline: isAuthenticatedUser.query(({ ctx }) => {
+		const user = ctx.req.body.user as User;
+		redis.srem(onlineUsersKey, user.id);
+	}),
+
+	setUserOnline: isAuthenticatedUser.query(({ ctx }) => {
+		const user = ctx.req.body.user as User;
+		redis.sadd(onlineUsersKey, user.id);
 	}),
 });
