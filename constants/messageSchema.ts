@@ -21,14 +21,14 @@ export const SendMessageInput = z.object({
 });
 
 export const MessageSchema = z.object({
-	id: z.optional(z.string()),
+	id: z.string(),
 	sentAt: z.date(),
 	message: z.string(),
 	chatId: z.string(),
 	senderId: z.number(),
 	recipientId: z.number(),
-	viewed: z.boolean().default(false),
-	receivedAt: z.date().optional(),
+	viewed: z.boolean(),
+	receivedAt: z.date().nullable().default(null),
 });
 
 export const SendMessageOutput = z.object({
@@ -43,6 +43,7 @@ export const LoadChatOutput = z.object({
 	success: z.boolean(),
 	message: z.string(),
 	chatId: z.string().optional(),
+	messages: z.optional(z.array(MessageSchema)),
 });
 
 export type Message = z.TypeOf<typeof MessageSchema>;

@@ -4,14 +4,11 @@ import {
 	LoadChatInput,
 	LoadChatOutput,
 	Message,
-	MessageSchema,
 	SendMessageInput,
 	SendMessageOutput,
 } from "../constants/messageSchema";
-import { isExpressRequest } from "../context";
 import { isAuthenticatedUser, isWsRequest } from "./middlewares";
 import { authTokenType, extractToken } from "../utils/extractToken";
-import { randomUUID } from "crypto";
 import { Events, eventEmitter } from "../constants/events";
 import { observable } from "@trpc/server/observable";
 import { redis } from "../redis";
@@ -26,7 +23,16 @@ export const messageRouter = trpc.router({
 		.mutation(async ({ ctx, input }) => {
 			try {
 				const user = ctx.req.body.user as User;
-				const message: Message = {
+				const message: {
+					message: string;
+					chatId: string;
+					senderId: number;
+					recipientId: number;
+					sentAt: Date;
+
+					viewed: boolean;
+					receivedAt?: Date;
+				} = {
 					...input,
 					sentAt: new Date(),
 					senderId: user.id,
@@ -37,7 +43,6 @@ export const messageRouter = trpc.router({
 					message.receivedAt = new Date();
 					eventEmitter.emit(Events.SEND_MESSAGE, message);
 				}
-				// store message in db here
 				const savedMessage = await prisma.individualMessage.create({
 					data: {
 						...message,
@@ -49,10 +54,11 @@ export const messageRouter = trpc.router({
 				return { success: false, message: "Something went wrong!" };
 			}
 		}),
+
 	loadIndividualChat: isAuthenticatedUser
 		.input(LoadChatInput)
 		.output(LoadChatOutput)
-		.query(async ({ ctx, input }) => {
+		.mutation(async ({ ctx, input }) => {
 			try {
 				const user = ctx.req.body.user as User;
 				const recipient = await prisma.user.findFirst({
@@ -61,21 +67,21 @@ export const messageRouter = trpc.router({
 				if (!recipient) return { success: false, message: "No user found" };
 				const chat = await prisma.individualChat.findFirst({
 					where: {
-						AND: [
-							// { users: { some: { id: user1Id } } }, // Check if user1 is a participant
-							// { users: { some: { id: user2Id } } },
-							{ Users: { every: { id: { in: [user.id, input.recipientId] } } } },
-						],
+						AND: [{ Users: { every: { id: { in: [user.id, input.recipientId] } } } }],
 					},
 				});
-				if (chat) return { success: true, message: "chat id fetched!" };
+				if (chat) {
+					const messages = await prisma.individualMessage.findMany({ where: { chatId: chat.id } });
+					return { success: true, message: "chat id fetched!", chatId: chat.id, messages };
+				}
 				const newChat = await prisma.individualChat.create({
 					data: {
-						Users: { create: [recipient, user] },
+						Users: { connect: [recipient, user] },
 					},
 				});
-				return { success: true, message: "Chat created!", chatId: newChat.id };
+				return { success: true, message: "Chat created!", chatId: newChat.id, messages: [] };
 			} catch (error) {
+				console.log(error);
 				return { success: false, message: "Something went wrong!" };
 			}
 		}),

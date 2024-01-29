@@ -9,7 +9,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
     };
     meta: object;
     errorShape: import("@trpc/server").DefaultErrorShape;
-    transformer: import("@trpc/server").DefaultDataTransformer;
+    transformer: typeof import("superjson").default;
 }>, {
     greeting: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
@@ -19,7 +19,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             };
             meta: object;
             errorShape: import("@trpc/server").DefaultErrorShape;
-            transformer: import("@trpc/server").DefaultDataTransformer;
+            transformer: typeof import("superjson").default;
         }>;
         _ctx_out: {
             req: import("http").IncomingMessage | import("express").Request<import("express-serve-static-core").ParamsDictionary, any, any, import("qs").ParsedQs, Record<string, any>>;
@@ -39,7 +39,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             };
             meta: object;
             errorShape: import("@trpc/server").DefaultErrorShape;
-            transformer: import("@trpc/server").DefaultDataTransformer;
+            transformer: typeof import("superjson").default;
         }>;
         _meta: object;
         _ctx_out: {
@@ -62,7 +62,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
         };
         meta: object;
         errorShape: import("@trpc/server").DefaultErrorShape;
-        transformer: import("@trpc/server").DefaultDataTransformer;
+        transformer: typeof import("superjson").default;
     }>, {
         register: import("@trpc/server").BuildProcedure<"mutation", {
             _config: import("@trpc/server").RootConfig<{
@@ -72,7 +72,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 };
                 meta: object;
                 errorShape: import("@trpc/server").DefaultErrorShape;
-                transformer: import("@trpc/server").DefaultDataTransformer;
+                transformer: typeof import("superjson").default;
             }>;
             _meta: object;
             _ctx_out: {
@@ -110,7 +110,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 };
                 meta: object;
                 errorShape: import("@trpc/server").DefaultErrorShape;
-                transformer: import("@trpc/server").DefaultDataTransformer;
+                transformer: typeof import("superjson").default;
             }>;
             _meta: object;
             _ctx_out: {
@@ -120,10 +120,12 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             _input_in: {
                 username: string;
                 password: string;
+                withUsername?: boolean | undefined;
             };
             _input_out: {
                 username: string;
                 password: string;
+                withUsername: boolean;
             };
             _output_in: {
                 message: string;
@@ -146,7 +148,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 };
                 meta: object;
                 errorShape: import("@trpc/server").DefaultErrorShape;
-                transformer: import("@trpc/server").DefaultDataTransformer;
+                transformer: typeof import("superjson").default;
             }>;
             _ctx_out: {
                 req: import("http").IncomingMessage | import("express").Request<import("express-serve-static-core").ParamsDictionary, any, any, import("qs").ParsedQs, Record<string, any>>;
@@ -171,21 +173,28 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 };
                 meta: object;
                 errorShape: import("@trpc/server").DefaultErrorShape;
-                transformer: import("@trpc/server").DefaultDataTransformer;
+                transformer: typeof import("superjson").default;
             }>;
             _meta: object;
             _ctx_out: {
-                req: import("express").Request<import("express-serve-static-core").ParamsDictionary, any, any, import("qs").ParsedQs, Record<string, any>>;
-                res: import("express").Response<any, Record<string, any>>;
+                req: import("http").IncomingMessage | import("express").Request<import("express-serve-static-core").ParamsDictionary, any, any, import("qs").ParsedQs, Record<string, any>>;
+                res: import("ws").WebSocket | import("express").Response<any, Record<string, any>>;
             };
             _input_in: typeof import("@trpc/server").unsetMarker;
             _input_out: typeof import("@trpc/server").unsetMarker;
-            _output_in: typeof import("@trpc/server").unsetMarker;
-            _output_out: typeof import("@trpc/server").unsetMarker;
-        }, {
-            success: boolean;
-            message: string;
-        }>;
+            _output_in: {
+                message: string;
+                success: boolean;
+                username?: string | undefined;
+                userId?: number | undefined;
+            };
+            _output_out: {
+                message: string;
+                success: boolean;
+                username?: string | undefined;
+                userId?: number | undefined;
+            };
+        }, unknown>;
         secretInfo: import("@trpc/server").BuildProcedure<"query", {
             _config: import("@trpc/server").RootConfig<{
                 ctx: {
@@ -194,7 +203,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 };
                 meta: object;
                 errorShape: import("@trpc/server").DefaultErrorShape;
-                transformer: import("@trpc/server").DefaultDataTransformer;
+                transformer: typeof import("superjson").default;
             }>;
             _meta: object;
             _ctx_out: {
@@ -217,7 +226,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 };
                 meta: object;
                 errorShape: import("@trpc/server").DefaultErrorShape;
-                transformer: import("@trpc/server").DefaultDataTransformer;
+                transformer: typeof import("superjson").default;
             }>;
             _ctx_out: {
                 req: import("http").IncomingMessage | import("express").Request<import("express-serve-static-core").ParamsDictionary, any, any, import("qs").ParsedQs, Record<string, any>>;
@@ -237,7 +246,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 };
                 meta: object;
                 errorShape: import("@trpc/server").DefaultErrorShape;
-                transformer: import("@trpc/server").DefaultDataTransformer;
+                transformer: typeof import("superjson").default;
             }>;
             _meta: object;
             _ctx_out: {
@@ -271,9 +280,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
         };
         meta: object;
         errorShape: import("@trpc/server").DefaultErrorShape;
-        transformer: import("@trpc/server").DefaultDataTransformer;
+        transformer: typeof import("superjson").default;
     }>, {
-        sendMessage: import("@trpc/server").BuildProcedure<"mutation", {
+        sendIndividualMessage: import("@trpc/server").BuildProcedure<"mutation", {
             _config: import("@trpc/server").RootConfig<{
                 ctx: {
                     req: import("http").IncomingMessage | import("express").Request<import("express-serve-static-core").ParamsDictionary, any, any, import("qs").ParsedQs, Record<string, any>>;
@@ -281,7 +290,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 };
                 meta: object;
                 errorShape: import("@trpc/server").DefaultErrorShape;
-                transformer: import("@trpc/server").DefaultDataTransformer;
+                transformer: typeof import("superjson").default;
             }>;
             _meta: object;
             _ctx_out: {
@@ -290,15 +299,15 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             };
             _input_in: {
                 message: string;
+                recipientId: number;
                 senderId: number;
-                receiverId: number;
-                chatId?: string | undefined;
+                chatId: string;
             };
             _input_out: {
                 message: string;
+                recipientId: number;
                 senderId: number;
-                receiverId: number;
-                chatId?: string | undefined;
+                chatId: string;
             };
             _output_in: {
                 message: string;
@@ -306,12 +315,14 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 chat?: {
                     message: string;
                     id: string;
-                    chatId: string;
-                    senderId: number;
-                    receiverId: number;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    recipientId: number;
                     sentAt: Date;
-                    viewed?: boolean | undefined;
-                    receivetAt?: Date | undefined;
+                    senderId: number;
+                    viewed: boolean;
+                    receivedAt: Date | null;
+                    chatId: string;
                 } | undefined;
             };
             _output_out: {
@@ -320,13 +331,67 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 chat?: {
                     message: string;
                     id: string;
-                    chatId: string;
-                    senderId: number;
-                    receiverId: number;
+                    createdAt: Date;
+                    updatedAt: Date;
+                    recipientId: number;
                     sentAt: Date;
+                    senderId: number;
                     viewed: boolean;
-                    receivetAt?: Date | undefined;
+                    receivedAt: Date | null;
+                    chatId: string;
                 } | undefined;
+            };
+        }, unknown>;
+        loadIndividualChat: import("@trpc/server").BuildProcedure<"mutation", {
+            _config: import("@trpc/server").RootConfig<{
+                ctx: {
+                    req: import("http").IncomingMessage | import("express").Request<import("express-serve-static-core").ParamsDictionary, any, any, import("qs").ParsedQs, Record<string, any>>;
+                    res: import("ws").WebSocket | import("express").Response<any, Record<string, any>>;
+                };
+                meta: object;
+                errorShape: import("@trpc/server").DefaultErrorShape;
+                transformer: typeof import("superjson").default;
+            }>;
+            _meta: object;
+            _ctx_out: {
+                req: import("express").Request<import("express-serve-static-core").ParamsDictionary, any, any, import("qs").ParsedQs, Record<string, any>>;
+                res: import("express").Response<any, Record<string, any>>;
+            };
+            _input_in: {
+                recipientId: number;
+            };
+            _input_out: {
+                recipientId: number;
+            };
+            _output_in: {
+                message: string;
+                success: boolean;
+                chatId?: string | undefined;
+                messages?: {
+                    message: string;
+                    id: string;
+                    recipientId: number;
+                    sentAt: Date;
+                    senderId: number;
+                    viewed: boolean;
+                    chatId: string;
+                    receivedAt?: Date | null | undefined;
+                }[] | undefined;
+            };
+            _output_out: {
+                message: string;
+                success: boolean;
+                chatId?: string | undefined;
+                messages?: {
+                    message: string;
+                    id: string;
+                    recipientId: number;
+                    sentAt: Date;
+                    senderId: number;
+                    viewed: boolean;
+                    receivedAt: Date | null;
+                    chatId: string;
+                }[] | undefined;
             };
         }, unknown>;
         onSendMessage: import("@trpc/server").BuildProcedure<"subscription", {
@@ -337,30 +402,26 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 };
                 meta: object;
                 errorShape: import("@trpc/server").DefaultErrorShape;
-                transformer: import("@trpc/server").DefaultDataTransformer;
+                transformer: typeof import("superjson").default;
             }>;
             _meta: object;
             _ctx_out: {
                 req: import("http").IncomingMessage;
                 res: import("ws").WebSocket;
             };
-            _input_in: {
-                chatId: string;
-            };
-            _input_out: {
-                chatId: string;
-            };
+            _input_in: typeof import("@trpc/server").unsetMarker;
+            _input_out: typeof import("@trpc/server").unsetMarker;
             _output_in: typeof import("@trpc/server").unsetMarker;
             _output_out: typeof import("@trpc/server").unsetMarker;
         }, import("@trpc/server/observable").Observable<{
             message: string;
             id: string;
-            chatId: string;
-            senderId: number;
-            receiverId: number;
+            recipientId: number;
             sentAt: Date;
+            senderId: number;
             viewed: boolean;
-            receivetAt?: Date | undefined;
+            receivedAt: Date | null;
+            chatId: string;
         }, unknown>>;
     }>;
 }>;

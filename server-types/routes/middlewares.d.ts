@@ -10,7 +10,7 @@ export declare const isAuthenticatedUser: import("@trpc/server").ProcedureBuilde
         };
         meta: object;
         errorShape: import("@trpc/server").DefaultErrorShape;
-        transformer: import("@trpc/server").DefaultDataTransformer;
+        transformer: typeof import("superjson").default;
     }>;
     _meta: object;
     _ctx_out: {
@@ -30,7 +30,7 @@ export declare const isWsRequest: import("@trpc/server").ProcedureBuilder<{
         };
         meta: object;
         errorShape: import("@trpc/server").DefaultErrorShape;
-        transformer: import("@trpc/server").DefaultDataTransformer;
+        transformer: typeof import("superjson").default;
     }>;
     _meta: object;
     _ctx_out: {

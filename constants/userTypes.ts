@@ -7,7 +7,6 @@ export const UserRegisterObject = z.object({ username: z.string(), password: z.s
 export const UserLoginObject = z.object({
 	username: z.string(),
 	password: z.string(),
-	email: z.string(),
 	withUsername: z.boolean().default(false),
 });
 

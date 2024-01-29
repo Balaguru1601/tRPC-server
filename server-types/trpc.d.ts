@@ -2,6 +2,7 @@
 /// <reference types="qs" />
 /// <reference types="express" />
 /// <reference types="ws" />
+import superjson from "superjson";
 export declare const trpc: {
     _config: import("@trpc/server").RootConfig<{
         ctx: {
@@ -10,7 +11,7 @@ export declare const trpc: {
         };
         meta: object;
         errorShape: import("@trpc/server").DefaultErrorShape;
-        transformer: import("@trpc/server").DefaultDataTransformer;
+        transformer: typeof superjson;
     }>;
     procedure: import("@trpc/server").ProcedureBuilder<{
         _config: import("@trpc/server").RootConfig<{
@@ -20,7 +21,7 @@ export declare const trpc: {
             };
             meta: object;
             errorShape: import("@trpc/server").DefaultErrorShape;
-            transformer: import("@trpc/server").DefaultDataTransformer;
+            transformer: typeof superjson;
         }>;
         _ctx_out: {
             req: import("http").IncomingMessage | import("express").Request<import("express-serve-static-core").ParamsDictionary, any, any, import("qs").ParsedQs, Record<string, any>>;
@@ -40,7 +41,7 @@ export declare const trpc: {
             };
             meta: object;
             errorShape: import("@trpc/server").DefaultErrorShape;
-            transformer: import("@trpc/server").DefaultDataTransformer;
+            transformer: typeof superjson;
         }>;
         _ctx_out: {};
         _input_out: typeof import("@trpc/server").unsetMarker;
@@ -56,7 +57,7 @@ export declare const trpc: {
             };
             meta: object;
             errorShape: import("@trpc/server").DefaultErrorShape;
-            transformer: import("@trpc/server").DefaultDataTransformer;
+            transformer: typeof superjson;
         }>;
         _ctx_out: {};
         _input_out: typeof import("@trpc/server").unsetMarker;
@@ -72,7 +73,7 @@ export declare const trpc: {
         };
         meta: object;
         errorShape: import("@trpc/server").DefaultErrorShape;
-        transformer: import("@trpc/server").DefaultDataTransformer;
+        transformer: typeof superjson;
     }>, TProcRouterRecord>;
     mergeRouters: typeof import("@trpc/server").mergeRouters;
     createCallerFactory: <TRouter extends import("@trpc/server").Router<import("@trpc/server").AnyRouterDef<import("@trpc/server").RootConfig<{
@@ -82,6 +83,6 @@ export declare const trpc: {
         };
         meta: object;
         errorShape: import("@trpc/server").DefaultErrorShape;
-        transformer: import("@trpc/server").DefaultDataTransformer;
+        transformer: typeof superjson;
     }>, any>>>(router: TRouter) => import("@trpc/server").RouterCaller<TRouter["_def"]>;
 };

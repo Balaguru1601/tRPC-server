@@ -76,11 +76,11 @@ export const userRouter = trpc.router({
 		.input(UserLoginObject)
 		.output(AuthOutput)
 		.mutation(async ({ ctx, input }) => {
-			const { username, password } = input;
+			const { username, password, withUsername } = input;
 			try {
 				if (isExpressRequest(ctx)) {
-					let user: UserTypeObject | null = null;
-					if (input.withUsername)
+					let user: User | null = null;
+					if (withUsername)
 						user = await prisma.user.findFirst({
 							where: {
 								username,
@@ -186,7 +186,7 @@ export const userRouter = trpc.router({
 				const userIds: number[] = Array.from(onlineUsers, (x) => +x);
 				const users = await prisma.user.findMany({
 					where: {
-						id: { in: userIds, not: 2 },
+						id: { in: userIds, not: user.id },
 					},
 				});
 				prisma.individualMessage.updateMany({
