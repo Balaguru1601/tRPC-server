@@ -173,7 +173,7 @@ export const userRouter = trpc.router({
 
 		//     }
 		// })
-		const user = ctx.req.body.user as User;
+		const user = ctx.user;
 		const onlineUsers = await redis.smembers(onlineUsersKey, async (err, onlineUsers) => {
 			if (err) {
 				return { success: false, message: "Failed to get online users!" };
@@ -206,12 +206,12 @@ export const userRouter = trpc.router({
 	}),
 
 	setUserOffline: isAuthenticatedUser.query(({ ctx }) => {
-		const user = ctx.req.body.user as User;
+		const user = ctx.user;
 		redis.srem(onlineUsersKey, user.id);
 	}),
 
 	setUserOnline: isAuthenticatedUser.query(({ ctx }) => {
-		const user = ctx.req.body.user as User;
+		const user = ctx.user;
 		redis.sadd(onlineUsersKey, user.id);
 	}),
 });

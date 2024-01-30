@@ -22,7 +22,7 @@ export const messageRouter = trpc.router({
 		.output(SendMessageOutput)
 		.mutation(async ({ ctx, input }) => {
 			try {
-				const user = ctx.req.body.user as User;
+				const user = ctx.user;
 				const message: {
 					message: string;
 					chatId: string;
@@ -60,7 +60,7 @@ export const messageRouter = trpc.router({
 		.output(LoadChatOutput)
 		.mutation(async ({ ctx, input }) => {
 			try {
-				const user = ctx.req.body.user as User;
+				const user = ctx.user;
 				const recipient = await prisma.user.findFirst({
 					where: { id: input.recipientId },
 				});

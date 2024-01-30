@@ -1,14 +1,10 @@
 import { isExpressRequest, isWSRequest } from "../context";
 import { trpc } from "../trpc";
-import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { PrismaClient } from "@prisma/client";
-import { EventEmitter } from "stream";
 import { authTokenType, extractToken } from "../utils/extractToken";
 
 const prisma = new PrismaClient();
-
-const userTypeObject = z.object({ username: z.string(), password: z.string(), email: z.string() });
 
 const isAuthenticatedUserMiddleware = trpc.middleware(async ({ ctx, next }) => {
 	try {
@@ -19,15 +15,13 @@ const isAuthenticatedUserMiddleware = trpc.middleware(async ({ ctx, next }) => {
 			const user = await prisma.user.findFirst({ where: { id: payload.id } });
 			if (!user) throw new Error();
 			ctx.req.body.user = user;
-			return next({ ctx });
+			return next({ ctx: { ...ctx, user: user } });
 		}
 		throw new Error();
 	} catch (e) {
-		console.log(e);
 		throw new TRPCError({
 			code: "UNAUTHORIZED",
 		});
-		// return {success: false}
 	}
 });
 
@@ -39,7 +33,6 @@ const wsRequestMiddleware = trpc.middleware(({ ctx, next }) => {
 				code: "UNAUTHORIZED",
 			});
 	} catch (e) {
-		console.log(e);
 		throw new TRPCError({
 			code: "UNAUTHORIZED",
 		});
