@@ -100,5 +100,16 @@ export const messageRouter = trpc.router({
 				console.log(error);
 			}
 		});
-	}),
+    }),
+    
+    getAllChats: isAuthenticatedUser.query(async ({ctx}) => {
+        const userId = ctx.user.id;
+        const chats = await prisma.user.findFirst({
+            where: {
+            id: userId
+            }, include: {
+            individualChats: ,
+        }})
+
+    })
 });
