@@ -1,9 +1,12 @@
 import { z } from "zod";
 import { trpc } from "../trpc";
 import {
+	AllChatOutput,
 	LoadChatInput,
 	LoadChatOutput,
 	Message,
+	OutputTemplate,
+	ProcessedChat,
 	SendMessageInput,
 	SendMessageOutput,
 } from "../constants/messageSchema";
@@ -100,16 +103,37 @@ export const messageRouter = trpc.router({
 				console.log(error);
 			}
 		});
-    }),
-    
-    getAllChats: isAuthenticatedUser.query(async ({ctx}) => {
-        const userId = ctx.user.id;
-        const chats = await prisma.user.findFirst({
-            where: {
-            id: userId
-            }, include: {
-            individualChats: ,
-        }})
+	}),
 
-    })
+	getAllChats: isAuthenticatedUser.output(OutputTemplate && AllChatOutput).query(async ({ ctx }) => {
+		const userId = ctx.user.id;
+
+		const chatsFromDb = await prisma.user.findFirst({
+			where: {
+				id: userId,
+			},
+			include: {
+				individualChats: {
+					include: {
+						Users: {
+							select: {
+								username: true,
+								id: true,
+								email: true,
+							},
+						},
+					},
+				},
+			},
+		});
+
+		const chats: ProcessedChat[] | null = chatsFromDb
+			? chatsFromDb.individualChats.map((item) => {
+					const user = item.Users[0].id === userId ? item.Users[1] : item.Users[0];
+					return { user, id: item.id, createdAt: item.createdAt, updatedAt: item.updatedAt };
+			  })
+			: null;
+
+		return { success: false, message: "some", chats };
+	}),
 });
