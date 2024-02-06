@@ -105,35 +105,39 @@ export const messageRouter = trpc.router({
 		});
 	}),
 
-	getAllChats: isAuthenticatedUser.output(OutputTemplate && AllChatOutput).query(async ({ ctx }) => {
+	getAllChats: isAuthenticatedUser.output(AllChatOutput).query(async ({ ctx }) => {
 		const userId = ctx.user.id;
-
-		const chatsFromDb = await prisma.user.findFirst({
-			where: {
-				id: userId,
-			},
-			include: {
-				individualChats: {
-					include: {
-						Users: {
-							select: {
-								username: true,
-								id: true,
-								email: true,
+		try {
+			const chatsFromDb = await prisma.user.findFirst({
+				where: {
+					id: userId,
+				},
+				include: {
+					individualChats: {
+						include: {
+							Users: {
+								select: {
+									username: true,
+									id: true,
+									email: true,
+								},
 							},
 						},
 					},
 				},
-			},
-		});
+			});
 
-		const chats: ProcessedChat[] | null = chatsFromDb
-			? chatsFromDb.individualChats.map((item) => {
-					const user = item.Users[0].id === userId ? item.Users[1] : item.Users[0];
-					return { user, id: item.id, createdAt: item.createdAt, updatedAt: item.updatedAt };
-			  })
-			: null;
-
-		return { success: false, message: "some", chats };
+			const chats: ProcessedChat[] | null = chatsFromDb
+				? chatsFromDb.individualChats.map((item) => {
+						const user = item.Users[0].id === userId ? item.Users[1] : item.Users[0];
+						return { user, id: item.id, createdAt: item.createdAt, updatedAt: item.updatedAt };
+				  })
+				: null;
+			if (chats) return { success: true, message: "Chats fetch success!", chats };
+			else return { success: true, message: "No Chats found" };
+		} catch (error) {
+			console.log(error);
+			return { success: false, message: "Something went wrong!" };
+		}
 	}),
 });

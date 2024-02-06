@@ -15,7 +15,7 @@ const IndividualMessageSchema = z.object({
 
 const userSchema = z.object({
 	id: z.number(),
-	email: z.string().email(), // Ensure a valid email format
+	email: z.string(), // Ensure a valid email format
 	username: z.string(),
 });
 
@@ -58,6 +58,8 @@ export const LoadChatOutput = z.object({
 });
 
 export const AllChatOutput = z.object({
+	success: z.boolean(),
+	message: z.string(),
 	chats: z
 		.array(
 			z.object({
@@ -67,7 +69,8 @@ export const AllChatOutput = z.object({
 				updatedAt: z.date(),
 			})
 		)
-		.nullable(),
+		.nullable()
+		.optional(),
 });
 
 export interface ProcessedChat {
