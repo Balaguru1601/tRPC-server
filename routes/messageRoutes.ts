@@ -74,15 +74,27 @@ export const messageRouter = trpc.router({
 					},
 				});
 				if (chat) {
-					const messages = await prisma.individualMessage.findMany({ where: { chatId: chat.id } });
-					return { success: true, message: "chat id fetched!", chatId: chat.id, messages };
+					const messages = await prisma.individualMessage.findMany({
+						where: { chatId: chat.id },
+					});
+					return {
+						success: true,
+						message: "chat id fetched!",
+						chatId: chat.id,
+						messages,
+					};
 				}
 				const newChat = await prisma.individualChat.create({
 					data: {
 						Users: { connect: [recipient, user] },
 					},
 				});
-				return { success: true, message: "Chat created!", chatId: newChat.id, messages: [] };
+				return {
+					success: true,
+					message: "Chat created!",
+					chatId: newChat.id,
+					messages: [],
+				};
 			} catch (error) {
 				console.log(error);
 				return { success: false, message: "Something went wrong!" };
@@ -92,7 +104,7 @@ export const messageRouter = trpc.router({
 	onSendMessage: isWsRequest.subscription(({ ctx, input }) => {
 		return observable<Message>((emit) => {
 			try {
-				const onMessage = (data: Message) => {
+				const onMessage = async (data: Message) => {
 					emit.next(data);
 				};
 				eventEmitter.on(Events.SEND_MESSAGE, onMessage);
@@ -108,6 +120,15 @@ export const messageRouter = trpc.router({
 	getAllChats: isAuthenticatedUser.output(AllChatOutput).query(async ({ ctx }) => {
 		const userId = ctx.user.id;
 		try {
+			await prisma.individualMessage.updateMany({
+				where: {
+					recipientId: userId,
+					receivedAt: null,
+				},
+				data: {
+					receivedAt: new Date(),
+				},
+			});
 			const chatsFromDb = await prisma.user.findFirst({
 				where: {
 					id: userId,
@@ -130,7 +151,12 @@ export const messageRouter = trpc.router({
 			const chats: ProcessedChat[] | null = chatsFromDb
 				? chatsFromDb.individualChats.map((item) => {
 						const user = item.Users[0].id === userId ? item.Users[1] : item.Users[0];
-						return { user, id: item.id, createdAt: item.createdAt, updatedAt: item.updatedAt };
+						return {
+							user,
+							id: item.id,
+							createdAt: item.createdAt,
+							updatedAt: item.updatedAt,
+						};
 				  })
 				: null;
 			if (chats) return { success: true, message: "Chats fetch success!", chats };
