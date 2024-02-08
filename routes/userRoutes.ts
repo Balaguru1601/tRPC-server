@@ -8,7 +8,7 @@ import { PrismaClient, User } from "@prisma/client";
 import { observable } from "@trpc/server/observable";
 import { isAuthenticatedUser } from "./middlewares";
 import { authTokenType, extractToken } from "../utils/extractToken";
-import { onlineUsersKey, redis } from "../redis";
+import { addUser, checkAndResetUser, onlineUsersKey, redis, removeUser } from "../redis";
 import { eventEmitter } from "../constants/events";
 import {
 	AuthOutput,
@@ -36,7 +36,8 @@ export const userRouter = trpc.router({
 							username,
 						},
 					});
-					if (existingUsername) return { success: false, message: "Username already exists!" };
+					if (existingUsername)
+						return { success: false, message: "Username already exists!" };
 
 					const existingEmail = await prisma.user.findFirst({
 						where: { email },
@@ -56,7 +57,7 @@ export const userRouter = trpc.router({
 					});
 					ctx.res.cookie("token", token);
 					// await redis.sadd<number>(onlineUsersKey, user.id);
-					const v = await redis.sadd(onlineUsersKey, user.id);
+					await addUser(user.id);
 
 					return {
 						success: true,
@@ -98,12 +99,21 @@ export const userRouter = trpc.router({
 
 					const verification = await bcrypt.compare(password, user.password);
 					if (user && verification) {
-						const token = jwt.sign({ id: user.id, username: user.username }, authSecret, {
-							expiresIn: 12 * 60 * 60 * 1000,
-						});
+						const token = jwt.sign(
+							{ id: user.id, username: user.username },
+							authSecret,
+							{
+								expiresIn: 12 * 60 * 60 * 1000,
+							}
+						);
 						ctx.res.cookie("token", token);
-						redis.sadd(onlineUsersKey, user.id);
-						return { success: true, message: "Login success", username: user.username, userId: user.id };
+						addUser(user.id);
+						return {
+							success: true,
+							message: "Login success",
+							username: user.username,
+							userId: user.id,
+						};
 					}
 				}
 				throw new Error();
@@ -118,12 +128,13 @@ export const userRouter = trpc.router({
 				const payload = extractToken(ctx.req.cookies.token, "auth") as authTokenType;
 				const user = await prisma.user.findFirst({ where: { id: payload.id } });
 				if (!user) throw new Error();
-				redis.sismember(onlineUsersKey, user.id, (err, isOnline) => {
-					if (err || isOnline === 0) {
-						redis.sadd(onlineUsersKey, user.id);
-					}
-				});
-				return { success: true, message: "Veification success", username: user.username, userId: user.id };
+				checkAndResetUser(user.id);
+				return {
+					success: true,
+					message: "Veification success",
+					username: user.username,
+					userId: user.id,
+				};
 			}
 		} catch (e) {
 			throw new TRPCError({
@@ -138,7 +149,7 @@ export const userRouter = trpc.router({
 			try {
 				const token = ctx.req.cookies.token;
 				const payload = extractToken(token, "auth") as authTokenType;
-				redis.srem(onlineUsersKey, payload.id);
+				removeUser(payload.id);
 				ctx.res.clearCookie("token");
 
 				return { success: true, message: "Logout success!" };
@@ -164,15 +175,6 @@ export const userRouter = trpc.router({
 	}),
 
 	getOnlineUsers: isAuthenticatedUser.output(OnlineUsersOutput).query(async ({ ctx }) => {
-		// return observable<{ username: string, userId: number }[]>((emit) => {
-		//     try {
-		//         function onlineUsers(data: { username: string; userId: number }[]) {
-
-		//         }
-		//     } catch (error) {
-
-		//     }
-		// })
 		const user = ctx.user;
 		const onlineUsers = await redis.smembers(onlineUsersKey, async (err, onlineUsers) => {
 			if (err) {
@@ -206,12 +208,10 @@ export const userRouter = trpc.router({
 	}),
 
 	setUserOffline: isAuthenticatedUser.query(({ ctx }) => {
-		const user = ctx.user;
-		redis.srem(onlineUsersKey, user.id);
+		removeUser(ctx.user.id);
 	}),
 
 	setUserOnline: isAuthenticatedUser.query(({ ctx }) => {
-		const user = ctx.user;
-		redis.sadd(onlineUsersKey, user.id);
+		addUser(ctx.user.id);
 	}),
 });

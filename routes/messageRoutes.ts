@@ -14,7 +14,7 @@ import { isAuthenticatedUser, isWsRequest } from "./middlewares";
 import { authTokenType, extractToken } from "../utils/extractToken";
 import { Events, eventEmitter } from "../constants/events";
 import { observable } from "@trpc/server/observable";
-import { onlineUsersKey, redis } from "../redis";
+import { isUserOnline, onlineUsersKey, redis } from "../redis";
 
 import { User } from "@prisma/client";
 import { prisma } from "..";
@@ -41,7 +41,7 @@ export const messageRouter = trpc.router({
 					senderId: user.id,
 					viewed: false,
 				};
-				const isReceiverOnline = await redis.sismember(onlineUsersKey, message.recipientId);
+				const isReceiverOnline = await isUserOnline(message.recipientId);
 				if (isReceiverOnline) {
 					message.receivedAt = new Date();
 					eventEmitter.emit(Events.SEND_MESSAGE, message);
@@ -74,19 +74,17 @@ export const messageRouter = trpc.router({
 					},
 				});
 				if (chat) {
-					const messages =
-						await prisma.$queryRaw`SELECT DATE_TRUNC('day', "sentAt") AS date,
-					            json_agg("chatapp_individualmessage".*) AS messages
+					const messages: { date: Date; messages: Message[] }[] =
+						await prisma.$queryRaw`SELECT DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z') AT TIME ZONE 'Asia/Kolkata') AS date,
+					            json_agg(json_build_object('id',id,'message',message,'sentAt',"sentAt",'receivedAt',"receivedAt",'viewed',viewed,'chatId',"chatId",'senderId',"senderId",'recipientId',"recipientId")) AS messages
 					            FROM "chatapp_individualmessage"
-					            GROUP BY DATE_TRUNC('day', "sentAt")
+					            GROUP BY DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z') AT TIME ZONE 'Asia/Kolkata')
 					            ORDER BY date;`;
-					// console.log(messages[0].messages);
-					const transfromMessage = messages as { date: Date; messages: Message[] }[];
 					return {
 						success: true,
 						message: "chat id fetched!",
 						chatId: chat.id,
-						messages: transfromMessage,
+						messages,
 					};
 				}
 				const newChat = await prisma.individualChat.create({
