@@ -54,7 +54,7 @@ export const LoadChatOutput = z.object({
 	success: z.boolean(),
 	message: z.string(),
 	chatId: z.string().optional(),
-	messages: z.optional(z.array(MessageSchema)),
+	messages: z.optional(z.array(z.object({ messages: z.array(MessageSchema), date: z.date() }))),
 });
 
 export const AllChatOutput = z.object({

@@ -74,14 +74,19 @@ export const messageRouter = trpc.router({
 					},
 				});
 				if (chat) {
-					const messages = await prisma.individualMessage.findMany({
-						where: { chatId: chat.id },
-					});
+					const messages =
+						await prisma.$queryRaw`SELECT DATE_TRUNC('day', "sentAt") AS date,
+					            json_agg("chatapp_individualmessage".*) AS messages
+					            FROM "chatapp_individualmessage"
+					            GROUP BY DATE_TRUNC('day', "sentAt")
+					            ORDER BY date;`;
+					// console.log(messages[0].messages);
+					const transfromMessage = messages as { date: Date; messages: Message[] }[];
 					return {
 						success: true,
 						message: "chat id fetched!",
 						chatId: chat.id,
-						messages,
+						messages: transfromMessage,
 					};
 				}
 				const newChat = await prisma.individualChat.create({
