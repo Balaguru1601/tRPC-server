@@ -2,15 +2,13 @@ import { z } from "zod";
 
 const IndividualMessageSchema = z.object({
 	id: z.string(),
-	sentAt: z.date(),
+	sentAt: z.string(),
 	message: z.string(),
 	chatId: z.string(),
 	senderId: z.number(),
 	recipientId: z.number(),
 	viewed: z.boolean(),
-	receivedAt: z.date().nullable(),
-	createdAt: z.date(),
-	updatedAt: z.date(),
+	receivedAt: z.string().nullable(),
 });
 
 const userSchema = z.object({

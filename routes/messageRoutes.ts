@@ -31,19 +31,18 @@ export const messageRouter = trpc.router({
 					chatId: string;
 					senderId: number;
 					recipientId: number;
-					sentAt: Date;
-
+					sentAt: string;
 					viewed: boolean;
-					receivedAt?: Date;
+					receivedAt?: string;
 				} = {
 					...input,
-					sentAt: new Date(),
+					sentAt: new Date().toISOString(),
 					senderId: user.id,
 					viewed: false,
 				};
 				const isReceiverOnline = await isUserOnline(message.recipientId);
 				if (isReceiverOnline) {
-					message.receivedAt = new Date();
+					message.receivedAt = new Date().toISOString();
 					eventEmitter.emit(Events.SEND_MESSAGE, message);
 				}
 				const savedMessage = await prisma.individualMessage.create({
@@ -51,7 +50,12 @@ export const messageRouter = trpc.router({
 						...message,
 					},
 				});
-				return { success: true, message: "Message sent", chat: savedMessage };
+				const msg: Message = {
+					...savedMessage,
+					sentAt: savedMessage.sentAt.toString(),
+					receivedAt: savedMessage.receivedAt ? savedMessage.receivedAt.toString() : null,
+				};
+				return { success: true, message: "Message sent", chat: msg };
 			} catch (error) {
 				console.log(error);
 				return { success: false, message: "Something went wrong!" };
