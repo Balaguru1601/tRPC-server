@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { trpc } from "../trpc";
 import {
 	AllChatOutput,
@@ -11,12 +10,9 @@ import {
 	SendMessageOutput,
 } from "../constants/messageSchema";
 import { isAuthenticatedUser, isWsRequest } from "./middlewares";
-import { authTokenType, extractToken } from "../utils/extractToken";
 import { Events, eventEmitter } from "../constants/events";
 import { observable } from "@trpc/server/observable";
-import { isUserOnline, onlineUsersKey, redis } from "../redis";
-
-import { User } from "@prisma/client";
+import { isUserOnline } from "../redis";
 import { prisma } from "..";
 
 export const messageRouter = trpc.router({
@@ -43,7 +39,6 @@ export const messageRouter = trpc.router({
 				const isReceiverOnline = await isUserOnline(message.recipientId);
 				if (isReceiverOnline) {
 					message.receivedAt = new Date().toISOString();
-					eventEmitter.emit(Events.SEND_MESSAGE, message);
 				}
 				const savedMessage = await prisma.individualMessage.create({
 					data: {
@@ -55,6 +50,9 @@ export const messageRouter = trpc.router({
 					sentAt: savedMessage.sentAt.toString(),
 					receivedAt: savedMessage.receivedAt ? savedMessage.receivedAt.toString() : null,
 				};
+				if (isReceiverOnline) {
+					eventEmitter.emit(Events.SEND_MESSAGE, savedMessage);
+				}
 				return { success: true, message: "Message sent", chat: msg };
 			} catch (error) {
 				console.log(error);
@@ -108,10 +106,10 @@ export const messageRouter = trpc.router({
 			}
 		}),
 
-	onSendMessage: isWsRequest.subscription(({ ctx, input }) => {
+	onSendMessage: isWsRequest.subscription(() => {
 		return observable<Message>((emit) => {
 			try {
-				const onMessage = async (data: Message) => {
+				const onMessage = (data: Message) => {
 					emit.next(data);
 				};
 				eventEmitter.on(Events.SEND_MESSAGE, onMessage);
