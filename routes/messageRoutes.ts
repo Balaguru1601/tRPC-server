@@ -8,6 +8,8 @@ import {
 	ProcessedChat,
 	SendMessageInput,
 	SendMessageOutput,
+	createChatInput,
+	createChatOutput,
 } from "../constants/messageSchema";
 import { isAuthenticatedUser, isWsRequest } from "./middlewares";
 import { Events, eventEmitter } from "../constants/events";
@@ -60,6 +62,41 @@ export const messageRouter = trpc.router({
 			}
 		}),
 
+	createChat: isAuthenticatedUser
+		.input(createChatInput)
+		.output(createChatOutput)
+		.mutation(async ({ ctx, input }) => {
+			try {
+				const user = ctx.user;
+				const chat = await prisma.individualChat.findFirst({
+					where: {
+						AND: [{ Users: { every: { id: { in: [user.id, input.recipientId] } } } }],
+					},
+				});
+				if (chat)
+					return {
+						message: "Chat exists",
+						success: true,
+						chatId: chat.id,
+						recipientId: input.recipientId,
+					};
+				const newChat = await prisma.individualChat.create({
+					data: {
+						Users: { connect: [{ id: user.id }, { id: input.recipientId }] },
+					},
+				});
+				return {
+					success: true,
+					message: "Chat created!",
+					chatId: newChat.id,
+					recipientId: input.recipientId,
+				};
+			} catch (error) {
+				console.log("create chat -->", error);
+				return { success: false, message: "Something went wrong!" };
+			}
+		}),
+
 	loadIndividualChat: isAuthenticatedUser
 		.input(LoadChatInput)
 		.output(LoadChatOutput)
@@ -80,6 +117,7 @@ export const messageRouter = trpc.router({
 						await prisma.$queryRaw`SELECT DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z') AT TIME ZONE 'Asia/Kolkata') AS date,
 					            json_agg(json_build_object('id',id,'message',message,'sentAt',"sentAt",'receivedAt',"receivedAt",'viewed',viewed,'chatId',"chatId",'senderId',"senderId",'recipientId',"recipientId")) AS messages
 					            FROM "chatapp_individualmessage"
+                                WHERE "chatId" = ${chat.id}
 					            GROUP BY DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z') AT TIME ZONE 'Asia/Kolkata')
 					            ORDER BY date;`;
 					return {
@@ -89,24 +127,17 @@ export const messageRouter = trpc.router({
 						messages,
 					};
 				}
-				const newChat = await prisma.individualChat.create({
-					data: {
-						Users: { connect: [recipient, user] },
-					},
-				});
 				return {
-					success: true,
-					message: "Chat created!",
-					chatId: newChat.id,
-					messages: [],
+					success: false,
+					message: "Chat not available",
 				};
 			} catch (error) {
-				console.log(error);
+				console.log("individual chat  -->", error);
 				return { success: false, message: "Something went wrong!" };
 			}
 		}),
 
-	onSendMessage: isWsRequest.subscription(() => {
+	onSendMessage: isWsRequest.subscription((d) => {
 		return observable<Message>((emit) => {
 			try {
 				const onMessage = (data: Message) => {

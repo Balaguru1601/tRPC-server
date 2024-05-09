@@ -8,8 +8,9 @@ import session from "express-session";
 import { createContext } from "./context";
 import cookieParser from "cookie-parser";
 import ws from "ws";
-import { redis } from "./redis";
+import { clearOnlineUsers, redis } from "./redis";
 import { PrismaClient } from "@prisma/client";
+import { Server } from "socket.io";
 
 declare module "express-session" {
 	export interface SessionData {
@@ -55,6 +56,14 @@ app.use(
 const server = app.listen(8080, () => console.log("listening at 8080"));
 
 const wss = new ws.WebSocketServer({ server });
+const io = new Server(server);
+
+io.on("connection", (socket) => {
+	console.log(`➕➕ Connection (${io.engine.clientsCount})`);
+	io.once("close", () => {
+		console.log(`➖➖ Connection (${io.engine.clientsCount})`);
+	});
+});
 
 wss.on("connection", (ws) => {
 	console.log(`➕➕ Connection (${wss.clients.size})`);
@@ -70,17 +79,34 @@ const handler = applyWSSHandler({
 });
 
 process.on("SIGTERM", () => {
-	handler.broadcastReconnectNotification();
-	wss.close();
-	redis.quit();
-	server.close();
+	clearOnlineUsers()
+		.then(() => {
+			handler.broadcastReconnectNotification();
+			wss.close();
+			redis.quit();
+			server.close();
+		})
+		.finally(() => {
+			console.log("finally");
+			process.exit(0);
+		});
 });
 
 process.on("SIGINT", () => {
-	handler.broadcastReconnectNotification();
-	wss.close();
-	redis.quit();
-	server.close();
+	clearOnlineUsers()
+		.then(() => {
+			handler.broadcastReconnectNotification();
+			wss.close();
+			redis.quit();
+			server.close();
+		})
+		.finally(() => {
+			console.log("finally");
+			process.exit(0);
+		});
 });
 
 process.on("warning", (e) => console.warn(e.stack));
+
+// process.on("beforeExit", async () => await clearOnlineUsers());
+// process.on("SIGINT",);

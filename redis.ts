@@ -53,10 +53,16 @@ export async function removeExpiredUsers() {
 }
 
 export async function getOnlineUsers() {
-	const now = Date.now();
-	const onlineUserIds = await redis.zrangebyscore(onlineUsersKey, now, "+inf");
-	// Optionally fetch user details from another data store based on IDs
-	return onlineUserIds;
+	try {
+		const now = Date.now();
+		const onlineUserIds = await redis.zrangebyscore(onlineUsersKey, 0, "+inf");
+		console.log(onlineUserIds);
+		// Optionally fetch user details from another data store based on IDs
+		return onlineUserIds;
+	} catch (error) {
+		console.log("error ->", error);
+		return [];
+	}
 }
 
 export async function isUserOnline(userId: number) {
@@ -67,6 +73,15 @@ export async function isUserOnline(userId: number) {
 export async function removeUser(userId: number) {
 	try {
 		await redis.zrem(onlineUsersKey, userId);
+	} catch (error) {
+		console.log(error);
+	}
+}
+
+export async function clearOnlineUsers() {
+	try {
+		await redis.zremrangebyscore(onlineUsersKey, "-inf", "+inf");
+		console.log("cleared online users");
 	} catch (error) {
 		console.log(error);
 	}
