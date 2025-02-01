@@ -4,6 +4,7 @@ require("dotenv").config();
 export const redis = new Redis(process.env.REDIS_URL!);
 
 export const onlineUsersKey = "users:online";
+const socketKey = "users:socketid";
 
 // Listen to 'error' events to the Redis connection
 redis.on("error", (error: any) => {
@@ -43,6 +44,19 @@ export async function addUser(userId: number) {
 	await redis.zadd(onlineUsersKey, expiry, userId);
 }
 
+export async function addSocketId(userId: number, socketid: string) {
+	await redis.hset(socketKey, userId, socketid);
+}
+
+export async function getSocketId(userId: number) {
+	const id = await redis.hget(socketKey, userId.toString());
+	return id;
+}
+
+export async function removeSocketId(userId: number) {
+	await redis.hdel(socketKey, userId.toString());
+}
+
 // addUser(1);
 // addUser(2);
 
@@ -54,9 +68,7 @@ export async function removeExpiredUsers() {
 
 export async function getOnlineUsers() {
 	try {
-		const now = Date.now();
 		const onlineUserIds = await redis.zrangebyscore(onlineUsersKey, 0, "+inf");
-		console.log(onlineUserIds);
 		// Optionally fetch user details from another data store based on IDs
 		return onlineUserIds;
 	} catch (error) {

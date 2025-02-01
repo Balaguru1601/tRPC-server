@@ -8,9 +8,9 @@ import session from "express-session";
 import { createContext } from "./context";
 import cookieParser from "cookie-parser";
 import ws from "ws";
-import { clearOnlineUsers, redis } from "./redis";
+import { addSocketId, clearOnlineUsers, redis, removeSocketId, removeUser } from "./redis";
 import { PrismaClient } from "@prisma/client";
-import { Server } from "socket.io";
+import { Server, Socket } from "socket.io";
 
 declare module "express-session" {
 	export interface SessionData {
@@ -53,17 +53,33 @@ app.use(
 	})
 );
 
+// const wsServer = app.listen(8081, () => console.log("ws server initialzed!"));
 const server = app.listen(8080, () => console.log("listening at 8080"));
 
 const wss = new ws.WebSocketServer({ server });
-const io = new Server(server);
+export const io = new Server({
+	cors: {
+		origin: "http://localhost:3000",
+	},
+});
+io.listen(8081);
 
 io.on("connection", (socket) => {
+	console.log(socket.handshake.auth.id);
+	console.log(socket.id);
+	addSocketId(+socket.handshake.auth.id, socket.id);
+	socket.on("disconnect", () => {
+		console.log("➖➖ Disconnect");
+		removeUser(+socket.handshake.auth.id);
+		removeSocketId(+socket.handshake.auth.id);
+	});
 	console.log(`➕➕ Connection (${io.engine.clientsCount})`);
 	io.once("close", () => {
 		console.log(`➖➖ Connection (${io.engine.clientsCount})`);
 	});
 });
+
+io.on("disconnect", () => {});
 
 wss.on("connection", (ws) => {
 	console.log(`➕➕ Connection (${wss.clients.size})`);

@@ -12,10 +12,11 @@ import {
 	createChatOutput,
 } from "../constants/messageSchema";
 import { isAuthenticatedUser, isWsRequest } from "./middlewares";
-import { Events, eventEmitter } from "../constants/events";
+import { EventTypes, eventEmitter } from "../constants/events";
 import { observable } from "@trpc/server/observable";
-import { isUserOnline } from "../redis";
-import { prisma } from "..";
+import { getSocketId, isUserOnline } from "../redis";
+import { io, prisma } from "..";
+import { EventEmitter } from "stream";
 
 export const messageRouter = trpc.router({
 	sendIndividualMessage: isAuthenticatedUser
@@ -53,7 +54,11 @@ export const messageRouter = trpc.router({
 					receivedAt: savedMessage.receivedAt ? savedMessage.receivedAt.toString() : null,
 				};
 				if (isReceiverOnline) {
-					eventEmitter.emit(Events.SEND_MESSAGE, savedMessage);
+					// eventEmitter.emit(Events.SEND_MESSAGE, savedMessage);
+					const receiverSocketId = await getSocketId(message.recipientId);
+					if (receiverSocketId) {
+						io.to(receiverSocketId).emit(EventTypes.SEND_MESSAGE, savedMessage);
+					}
 				}
 				return { success: true, message: "Message sent", chat: msg };
 			} catch (error) {
@@ -143,9 +148,9 @@ export const messageRouter = trpc.router({
 				const onMessage = (data: Message) => {
 					emit.next(data);
 				};
-				eventEmitter.on(Events.SEND_MESSAGE, onMessage);
+				eventEmitter.on(EventTypes.SEND_MESSAGE, onMessage);
 				return () => {
-					eventEmitter.off(Events.SEND_MESSAGE, onMessage);
+					eventEmitter.off(EventTypes.SEND_MESSAGE, onMessage);
 				};
 			} catch (error) {
 				console.log(error);
