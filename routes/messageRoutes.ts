@@ -15,8 +15,9 @@ import { isAuthenticatedUser, isWsRequest } from "./middlewares";
 import { EventTypes, eventEmitter } from "../constants/events";
 import { observable } from "@trpc/server/observable";
 import { getSocketId, isUserOnline } from "../redis";
-import { io, prisma } from "..";
+import { prisma } from "..";
 import { EventEmitter } from "stream";
+import { io } from "../socket";
 
 export const messageRouter = trpc.router({
 	sendIndividualMessage: isAuthenticatedUser
@@ -50,15 +51,15 @@ export const messageRouter = trpc.router({
 				});
 				const msg: Message = {
 					...savedMessage,
-					sentAt: savedMessage.sentAt.toString(),
-					receivedAt: savedMessage.receivedAt ? savedMessage.receivedAt.toString() : null,
+					sentAt: savedMessage.sentAt.toISOString(),
+					receivedAt: savedMessage.receivedAt
+						? savedMessage.receivedAt.toISOString()
+						: null,
 				};
 				if (isReceiverOnline) {
 					// eventEmitter.emit(Events.SEND_MESSAGE, savedMessage);
-					const receiverSocketId = await getSocketId(message.recipientId);
-					if (receiverSocketId) {
-						io.to(receiverSocketId).emit(EventTypes.SEND_MESSAGE, savedMessage);
-					}
+					const socketId = await getSocketId(message.recipientId);
+					if (socketId) io.to(socketId).emit(EventTypes.SEND_MESSAGE, msg);
 				}
 				return { success: true, message: "Message sent", chat: msg };
 			} catch (error) {
@@ -142,21 +143,21 @@ export const messageRouter = trpc.router({
 			}
 		}),
 
-	onSendMessage: isWsRequest.subscription((d) => {
-		return observable<Message>((emit) => {
-			try {
-				const onMessage = (data: Message) => {
-					emit.next(data);
-				};
-				eventEmitter.on(EventTypes.SEND_MESSAGE, onMessage);
-				return () => {
-					eventEmitter.off(EventTypes.SEND_MESSAGE, onMessage);
-				};
-			} catch (error) {
-				console.log(error);
-			}
-		});
-	}),
+	// onSendMessage: isWsRequest.subscription((d) => {
+	// 	return observable<Message>((emit) => {
+	// 		try {
+	// 			const onMessage = (data: Message) => {
+	// 				emit.next(data);
+	// 			};
+	// 			eventEmitter.on(EventTypes.SEND_MESSAGE, onMessage);
+	// 			return () => {
+	// 				eventEmitter.off(EventTypes.SEND_MESSAGE, onMessage);
+	// 			};
+	// 		} catch (error) {
+	// 			console.log(error);
+	// 		}
+	// 	});
+	// }),
 
 	getAllChats: isAuthenticatedUser.output(AllChatOutput).query(async ({ ctx }) => {
 		const userId = ctx.user.id;
