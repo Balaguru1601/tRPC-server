@@ -11,6 +11,12 @@ export const io = new Server(ioServer, {
 	},
 });
 
+// TODO - add onmessagedelete and onmessageupdate to update the message in the chat - socket.io
+// TODO - add typing to the chat input
+// TODO - show online users in the chat - socket.io
+// TODO - send online users whenever a user connects or disconnects - socket.io
+// TODO - track last seen time of the user - socket.io
+
 io.on("connection", (socket) => {
 	console.log(socket.handshake.auth.id);
 	console.log(socket.id);
