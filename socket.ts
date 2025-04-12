@@ -2,6 +2,7 @@ import { Server } from "socket.io";
 import { addSocketId, getOnlineUsers, getSocketId, removeSocketId, removeUser } from "./redis";
 import { EventTypes } from "./constants/events";
 import { Message } from "./constants/messageSchema";
+import { registerSocketEvents } from "./routes/socketRoutes";
 
 export const ioServer = require("http").createServer();
 
@@ -31,22 +32,9 @@ io.on("connection", (socket) => {
 	});
 
 	console.log(`➕➕ Connection (${io.engine.clientsCount})`);
-	socket.on(EventTypes.SEND_MESSAGE, async (message: Message) => {
-		console.log("Message received:", message);
 
-		const receiverSocketId = await getSocketId(message.recipientId);
-		if (receiverSocketId) {
-			io.to(receiverSocketId).emit(EventTypes.SEND_MESSAGE, message);
-		}
-	});
+	registerSocketEvents(io, socket); // Registering socket events for each connection
 
-	socket.on(EventTypes.GET_ONLINE_USERS, async (userId: number) => {
-		const socketId = await getSocketId(userId);
-		const userIds = await getOnlineUsers();
-		if (socketId) {
-			io.to(socketId).emit(EventTypes.GET_ONLINE_USERS, userIds);
-		}
-	});
 	io.once("close", () => {
 		console.log(`➖➖ Connection (${io.engine.clientsCount})`);
 	});

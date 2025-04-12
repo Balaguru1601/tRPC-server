@@ -49,12 +49,15 @@ export const MessageSchema = z.object({
 	recipientId: z.number(),
 	viewed: z.boolean(),
 	receivedAt: z.string().nullable().default(null),
+	deletedBy: z.number().nullable().default(null),
+	deletedAt: z.string().nullable().default(null),
+	deletionScope: z.enum(["ALL", "SELF"]).nullable().default(null),
 });
 
 export const SendMessageOutput = z.object({
 	success: z.boolean(),
 	message: z.string(),
-	chat: IndividualMessageSchema.optional(),
+	chat: MessageSchema.optional(),
 });
 
 export const LoadChatInput = z.object({ recipientId: z.number() });
@@ -92,5 +95,15 @@ export interface ProcessedChat {
 	createdAt: Date;
 	updatedAt: Date;
 }
+
+export const deleteMessageInput = z.object({
+	message: MessageSchema,
+	all: z.boolean(),
+});
+
+export const deleteMessageOutput = z.object({
+	success: z.boolean(),
+	message: z.string(),
+});
 
 export type Message = z.TypeOf<typeof MessageSchema>;

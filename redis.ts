@@ -39,9 +39,12 @@ redis.on("connect", (err: any) => {
 // Get all online users
 
 export async function addUser(userId: number) {
-	console.log("add user");
-	const expiry = Date.now() + 3600000; // 1 hour in milliseconds
-	await redis.zadd(onlineUsersKey, expiry, userId);
+	try {
+		const expiry = Date.now() + 3600000; // 1 hour in milliseconds
+		await redis.zadd(onlineUsersKey, expiry, userId);
+	} catch (error) {
+		console.log("Error adding user:", error);
+	}
 }
 
 export async function addSocketId(userId: number, socketid: string) {
@@ -98,6 +101,15 @@ export async function clearOnlineUsers() {
 		console.log(error);
 	}
 }
+
+// export async function checkAndSetUserSocketId(userId: number, socketId: string) {
+//     // check if the user socket id is there else set it
+//     const id = await redis.hget(socketKey, userId.toString());
+//     if (!id) {
+//         await redis.hset(socketKey, userId.toString(), socketId);
+//     }
+//     return id;
+// }
 
 export async function checkAndResetUser(userId: number) {
 	// const now = Date.now();

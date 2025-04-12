@@ -10,11 +10,13 @@ import {
 	SendMessageOutput,
 	createChatInput,
 	createChatOutput,
+	deleteMessageInput,
+	deleteMessageOutput,
 } from "../constants/messageSchema";
 import { isAuthenticatedUser, isWsRequest } from "./middlewares";
 import { EventTypes, eventEmitter } from "../constants/events";
 import { observable } from "@trpc/server/observable";
-import { getSocketId, isUserOnline } from "../redis";
+import { getOnlineUsers, getSocketId, isUserOnline } from "../redis";
 import { prisma } from "..";
 import { EventEmitter } from "stream";
 import { io } from "../socket";
@@ -49,8 +51,10 @@ export const messageRouter = trpc.router({
 						...message,
 					},
 				});
+
 				const msg: Message = {
 					...savedMessage,
+					deletedAt: savedMessage.deletedAt ? savedMessage.deletedAt.toISOString() : null,
 					sentAt: savedMessage.sentAt.toISOString(),
 					receivedAt: savedMessage.receivedAt
 						? savedMessage.receivedAt.toISOString()
@@ -121,7 +125,10 @@ export const messageRouter = trpc.router({
 				if (chat) {
 					const messages: { date: Date; messages: Message[] }[] =
 						await prisma.$queryRaw`SELECT DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z') AT TIME ZONE 'Asia/Kolkata') AS date,
-					            json_agg(json_build_object('id',id,'message',message,'sentAt',"sentAt",'receivedAt',"receivedAt",'viewed',viewed,'chatId',"chatId",'senderId',"senderId",'recipientId',"recipientId")) AS messages
+					            json_agg(json_build_object('id',id,'message',message,'sentAt',"sentAt",'receivedAt',"receivedAt",'viewed',
+                                viewed,'chatId',"chatId",'senderId',"senderId",'recipientId',"recipientId",'deletedAt',"deletedAt",
+                                'deletedBy',"deletedBy",'deletionScope',"deletionScope")) 
+                                AS messages
 					            FROM "chatapp_individualmessage"
                                 WHERE "chatId" = ${chat.id}
 					            GROUP BY DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z') AT TIME ZONE 'Asia/Kolkata')
@@ -208,4 +215,45 @@ export const messageRouter = trpc.router({
 			return { success: false, message: "Something went wrong!" };
 		}
 	}),
+
+	// TODO - check if you want to implement time limit for deleting messages
+	deleteMessage: isAuthenticatedUser
+		.input(deleteMessageInput)
+		.output(deleteMessageOutput)
+		.mutation(async ({ ctx, input }) => {
+			try {
+				const user = ctx.user;
+				const { message, all } = input;
+				const msg = await prisma.individualMessage.findUnique({
+					where: { id: input.message.id },
+				});
+				if (msg && msg.deletedBy && msg.deletedBy != user.id) {
+					await prisma.individualMessage.delete({
+						where: { id: message.id },
+					});
+				} else {
+					const deletedMsg = await prisma.individualMessage.update({
+						where: { id: message.id },
+						data: {
+							deletedBy: user.id,
+							deletedAt: new Date(),
+							deletionScope: message.senderId == user.id && all ? "ALL" : "SELF",
+						},
+					});
+					// console.log("deleted message", deletedMsg);
+					if (all) {
+						const socketId = await getSocketId(deletedMsg.recipientId);
+						if (socketId)
+							io.to(socketId).emit(EventTypes.DETELE_MESSAGE, {
+								success: true,
+								message: deletedMsg,
+							});
+					}
+				}
+				return { success: true, message: "Message deleted!" };
+			} catch (error) {
+				console.log(error);
+				return { success: false, message: "Something went wrong!" };
+			}
+		}),
 });
