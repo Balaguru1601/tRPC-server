@@ -52,6 +52,7 @@ export const MessageSchema = z.object({
 	deletedBy: z.number().nullable().default(null),
 	deletedAt: z.string().nullable().default(null),
 	deletionScope: z.enum(["ALL", "SELF"]).nullable().default(null),
+	editedAt: z.string().nullable().default(null),
 });
 
 export const SendMessageOutput = z.object({
@@ -102,6 +103,17 @@ export const deleteMessageInput = z.object({
 });
 
 export const deleteMessageOutput = z.object({
+	success: z.boolean(),
+	message: z.string(),
+});
+
+export const editMessageInput = z.object({
+	messageId: z.string(),
+	message: z.string(),
+	editedAt: z.date(),
+});
+
+export const editMessageOutput = z.object({
 	success: z.boolean(),
 	message: z.string(),
 });

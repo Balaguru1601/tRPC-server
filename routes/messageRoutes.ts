@@ -12,6 +12,8 @@ import {
 	createChatOutput,
 	deleteMessageInput,
 	deleteMessageOutput,
+	editMessageInput,
+	editMessageOutput,
 } from "../constants/messageSchema";
 import { isAuthenticatedUser, isWsRequest } from "./middlewares";
 import { EventTypes, eventEmitter } from "../constants/events";
@@ -59,6 +61,7 @@ export const messageRouter = trpc.router({
 					receivedAt: savedMessage.receivedAt
 						? savedMessage.receivedAt.toISOString()
 						: null,
+					editedAt: savedMessage.editedAt ? savedMessage.editedAt.toISOString() : null,
 				};
 				if (isReceiverOnline) {
 					// eventEmitter.emit(Events.SEND_MESSAGE, savedMessage);
@@ -123,16 +126,32 @@ export const messageRouter = trpc.router({
 					},
 				});
 				if (chat) {
-					const messages: { date: Date; messages: Message[] }[] =
-						await prisma.$queryRaw`SELECT DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z') AT TIME ZONE 'Asia/Kolkata') AS date,
-					            json_agg(json_build_object('id',id,'message',message,'sentAt',"sentAt",'receivedAt',"receivedAt",'viewed',
-                                viewed,'chatId',"chatId",'senderId',"senderId",'recipientId',"recipientId",'deletedAt',"deletedAt",
-                                'deletedBy',"deletedBy",'deletionScope',"deletionScope")) 
-                                AS messages
-					            FROM "chatapp_individualmessage"
-                                WHERE "chatId" = ${chat.id}
-					            GROUP BY DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z') AT TIME ZONE 'Asia/Kolkata')
-					            ORDER BY date;`;
+					const messages: { date: Date; messages: Message[] }[] = await prisma.$queryRaw`
+                        SELECT
+                        DATE_TRUNC('day', ("sentAt" AT TIME ZONE 'Z')) AS date,
+                        json_agg(messages.* ORDER BY messages."sentAt") AS messages
+                        FROM (
+                        SELECT
+                            id, message, "sentAt", "receivedAt", viewed, "chatId",
+                            "senderId", "recipientId", "deletedAt", "deletedBy",
+                            "deletionScope", "editedAt"
+                        FROM "chatapp_individualmessage"
+                        WHERE "chatId" = ${chat.id}
+                        ORDER BY "sentAt"
+                        ) messages
+                        GROUP BY DATE_TRUNC('day', ("sentAt" AT TIME ZONE 'Z'))
+                        ORDER BY date;
+                        `;
+					// prisma.$queryRawSELECT DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z')) AS date,
+					//             json_agg(json_build_object('id',id,'message',message,'sentAt',"sentAt",'receivedAt',"receivedAt",'viewed',
+					//             viewed,'chatId',"chatId",'senderId',"senderId",'recipientId',"recipientId",'deletedAt',"deletedAt",
+					//             'deletedBy',"deletedBy",'deletionScope',"deletionScope",'editedAt',"editedAt"))
+					//             AS messages
+					//             FROM "chatapp_individualmessage"
+					//             WHERE "chatId" = ${chat.id}
+					//             GROUP BY DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z'))
+					//             ORDER BY date;
+					// console.log("messages", messages);
 					return {
 						success: true,
 						message: "chat id fetched!",
@@ -251,6 +270,41 @@ export const messageRouter = trpc.router({
 					}
 				}
 				return { success: true, message: "Message deleted!" };
+			} catch (error) {
+				console.log(error);
+				return { success: false, message: "Something went wrong!" };
+			}
+		}),
+
+	editMessage: isAuthenticatedUser
+		.input(editMessageInput)
+		.output(editMessageOutput)
+		.mutation(async ({ ctx, input }) => {
+			try {
+				const user = ctx.user;
+				const { message, messageId, editedAt } = input;
+				const msg = await prisma.individualMessage.findUnique({
+					where: { id: messageId },
+				});
+				if (msg && (msg.deletedBy == user.id || msg.deletionScope == "ALL")) {
+					return { success: false, message: "Message not found" };
+				} else {
+					const savedMsg = await prisma.individualMessage.update({
+						where: { id: messageId },
+						data: {
+							message,
+							editedAt,
+						},
+					});
+					const socketId = await getSocketId(msg!.recipientId);
+					if (socketId) {
+						io.to(socketId).emit(EventTypes.EDIT_MESSAGE, {
+							success: true,
+							message: savedMsg,
+						});
+					}
+					return { success: true, message: "Message edited!" };
+				}
 			} catch (error) {
 				console.log(error);
 				return { success: false, message: "Something went wrong!" };
