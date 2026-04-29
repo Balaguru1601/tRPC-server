@@ -8,12 +8,20 @@ import {
 	ProcessedChat,
 	SendMessageInput,
 	SendMessageOutput,
+	createChatInput,
+	createChatOutput,
+	deleteMessageInput,
+	deleteMessageOutput,
+	editMessageInput,
+	editMessageOutput,
 } from "../constants/messageSchema";
 import { isAuthenticatedUser, isWsRequest } from "./middlewares";
-import { Events, eventEmitter } from "../constants/events";
+import { EventTypes, eventEmitter } from "../constants/events";
 import { observable } from "@trpc/server/observable";
-import { isUserOnline } from "../redis";
+import { getOnlineUsers, getSocketId, isUserOnline } from "../redis";
 import { prisma } from "..";
+import { EventEmitter } from "stream";
+import { io } from "../socket";
 
 export const messageRouter = trpc.router({
 	sendIndividualMessage: isAuthenticatedUser
@@ -32,7 +40,7 @@ export const messageRouter = trpc.router({
 					receivedAt?: string;
 				} = {
 					...input,
-					sentAt: new Date().toISOString(),
+					sentAt: input.sentAt ?? new Date().toISOString(),
 					senderId: user.id,
 					viewed: false,
 				};
@@ -45,17 +53,59 @@ export const messageRouter = trpc.router({
 						...message,
 					},
 				});
+
 				const msg: Message = {
 					...savedMessage,
-					sentAt: savedMessage.sentAt.toString(),
-					receivedAt: savedMessage.receivedAt ? savedMessage.receivedAt.toString() : null,
+					deletedAt: savedMessage.deletedAt ? savedMessage.deletedAt.toISOString() : null,
+					sentAt: savedMessage.sentAt.toISOString(),
+					receivedAt: savedMessage.receivedAt
+						? savedMessage.receivedAt.toISOString()
+						: null,
+					editedAt: savedMessage.editedAt ? savedMessage.editedAt.toISOString() : null,
 				};
 				if (isReceiverOnline) {
-					eventEmitter.emit(Events.SEND_MESSAGE, savedMessage);
+					// eventEmitter.emit(Events.SEND_MESSAGE, savedMessage);
+					const socketId = await getSocketId(message.recipientId);
+					if (socketId) io.to(socketId).emit(EventTypes.SEND_MESSAGE, msg);
 				}
 				return { success: true, message: "Message sent", chat: msg };
 			} catch (error) {
 				console.log(error);
+				return { success: false, message: "Something went wrong!" };
+			}
+		}),
+
+	createChat: isAuthenticatedUser
+		.input(createChatInput)
+		.output(createChatOutput)
+		.mutation(async ({ ctx, input }) => {
+			try {
+				const user = ctx.user;
+				const chat = await prisma.individualChat.findFirst({
+					where: {
+						AND: [{ Users: { every: { id: { in: [user.id, input.recipientId] } } } }],
+					},
+				});
+				if (chat)
+					return {
+						message: "Chat exists",
+						success: true,
+						chatId: chat.id,
+						recipientId: input.recipientId,
+					};
+				const newChat = await prisma.individualChat.create({
+					data: {
+						Users: { connect: [{ id: user.id }, { id: input.recipientId }] },
+					},
+				});
+				return {
+					success: true,
+					message: "Chat created!",
+					chatId: newChat.id,
+					recipientId: input.recipientId,
+				};
+			} catch (error) {
+				console.log("create chat -->", error);
 				return { success: false, message: "Something went wrong!" };
 			}
 		}),
@@ -76,12 +126,32 @@ export const messageRouter = trpc.router({
 					},
 				});
 				if (chat) {
-					const messages: { date: Date; messages: Message[] }[] =
-						await prisma.$queryRaw`SELECT DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z') AT TIME ZONE 'Asia/Kolkata') AS date,
-					            json_agg(json_build_object('id',id,'message',message,'sentAt',"sentAt",'receivedAt',"receivedAt",'viewed',viewed,'chatId',"chatId",'senderId',"senderId",'recipientId',"recipientId")) AS messages
-					            FROM "chatapp_individualmessage"
-					            GROUP BY DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z') AT TIME ZONE 'Asia/Kolkata')
-					            ORDER BY date;`;
+					const messages: { date: Date; messages: Message[] }[] = await prisma.$queryRaw`
+                        SELECT
+                        DATE_TRUNC('day', ("sentAt" AT TIME ZONE 'Z')) AS date,
+                        json_agg(messages.* ORDER BY messages."sentAt") AS messages
+                        FROM (
+                        SELECT
+                            id, message, "sentAt", "receivedAt", viewed, "chatId",
+                            "senderId", "recipientId", "deletedAt", "deletedBy",
+                            "deletionScope", "editedAt"
+                        FROM "chatapp_individualmessage"
+                        WHERE "chatId" = ${chat.id} AND ("deletedBy" IS NULL OR ("deletedBy" = ${user.id} AND "deletionScope" = 'SELF'))
+                        ORDER BY "sentAt"
+                        ) messages
+                        GROUP BY DATE_TRUNC('day', ("sentAt" AT TIME ZONE 'Z'))
+                        ORDER BY date;
+                        `;
+					// prisma.$queryRawSELECT DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z')) AS date,
+					//             json_agg(json_build_object('id',id,'message',message,'sentAt',"sentAt",'receivedAt',"receivedAt",'viewed',
+					//             viewed,'chatId',"chatId",'senderId',"senderId",'recipientId',"recipientId",'deletedAt',"deletedAt",
+					//             'deletedBy',"deletedBy",'deletionScope',"deletionScope",'editedAt',"editedAt"))
+					//             AS messages
+					//             FROM "chatapp_individualmessage"
+					//             WHERE "chatId" = ${chat.id}
+					//             GROUP BY DATE_TRUNC('day',  ("sentAt" AT TIME ZONE 'Z'))
+					//             ORDER BY date;
+					// console.log("messages", messages);
 					return {
 						success: true,
 						message: "chat id fetched!",
@@ -89,38 +159,31 @@ export const messageRouter = trpc.router({
 						messages,
 					};
 				}
-				const newChat = await prisma.individualChat.create({
-					data: {
-						Users: { connect: [recipient, user] },
-					},
-				});
 				return {
-					success: true,
-					message: "Chat created!",
-					chatId: newChat.id,
-					messages: [],
+					success: false,
+					message: "Chat not available",
 				};
 			} catch (error) {
-				console.log(error);
+				console.log("individual chat  -->", error);
 				return { success: false, message: "Something went wrong!" };
 			}
 		}),
 
-	onSendMessage: isWsRequest.subscription(() => {
-		return observable<Message>((emit) => {
-			try {
-				const onMessage = (data: Message) => {
-					emit.next(data);
-				};
-				eventEmitter.on(Events.SEND_MESSAGE, onMessage);
-				return () => {
-					eventEmitter.off(Events.SEND_MESSAGE, onMessage);
-				};
-			} catch (error) {
-				console.log(error);
-			}
-		});
-	}),
+	// onSendMessage: isWsRequest.subscription((d) => {
+	// 	return observable<Message>((emit) => {
+	// 		try {
+	// 			const onMessage = (data: Message) => {
+	// 				emit.next(data);
+	// 			};
+	// 			eventEmitter.on(EventTypes.SEND_MESSAGE, onMessage);
+	// 			return () => {
+	// 				eventEmitter.off(EventTypes.SEND_MESSAGE, onMessage);
+	// 			};
+	// 		} catch (error) {
+	// 			console.log(error);
+	// 		}
+	// 	});
+	// }),
 
 	getAllChats: isAuthenticatedUser.output(AllChatOutput).query(async ({ ctx }) => {
 		const userId = ctx.user.id;
@@ -171,4 +234,80 @@ export const messageRouter = trpc.router({
 			return { success: false, message: "Something went wrong!" };
 		}
 	}),
+
+	// TODO - check if you want to implement time limit for deleting messages
+	deleteMessage: isAuthenticatedUser
+		.input(deleteMessageInput)
+		.output(deleteMessageOutput)
+		.mutation(async ({ ctx, input }) => {
+			try {
+				const user = ctx.user;
+				const { message, all } = input;
+				const msg = await prisma.individualMessage.findUnique({
+					where: { id: input.message.id },
+				});
+				if (msg && msg.deletedBy && msg.deletedBy != user.id) {
+					await prisma.individualMessage.delete({
+						where: { id: message.id },
+					});
+				} else {
+					const deletedMsg = await prisma.individualMessage.update({
+						where: { id: message.id },
+						data: {
+							deletedBy: user.id,
+							deletedAt: new Date(),
+							deletionScope: message.senderId == user.id && all ? "ALL" : "SELF",
+						},
+					});
+					// console.log("deleted message", deletedMsg);
+					if (all) {
+						const socketId = await getSocketId(deletedMsg.recipientId);
+						if (socketId)
+							io.to(socketId).emit(EventTypes.DETELE_MESSAGE, {
+								success: true,
+								message: deletedMsg,
+							});
+					}
+				}
+				return { success: true, message: "Message deleted!" };
+			} catch (error) {
+				console.log(error);
+				return { success: false, message: "Something went wrong!" };
+			}
+		}),
+
+	editMessage: isAuthenticatedUser
+		.input(editMessageInput)
+		.output(editMessageOutput)
+		.mutation(async ({ ctx, input }) => {
+			try {
+				const user = ctx.user;
+				const { message, messageId, editedAt } = input;
+				const msg = await prisma.individualMessage.findUnique({
+					where: { id: messageId },
+				});
+				if (msg && (msg.deletedBy == user.id || msg.deletionScope == "ALL")) {
+					return { success: false, message: "Message not found" };
+				} else {
+					const savedMsg = await prisma.individualMessage.update({
+						where: { id: messageId },
+						data: {
+							message,
+							editedAt,
+						},
+					});
+					const socketId = await getSocketId(msg!.recipientId);
+					if (socketId) {
+						io.to(socketId).emit(EventTypes.EDIT_MESSAGE, {
+							success: true,
+							message: savedMsg,
+						});
+					}
+					return { success: true, message: "Message edited!" };
+				}
+			} catch (error) {
+				console.log(error);
+				return { success: false, message: "Something went wrong!" };
+			}
+		}),
 });

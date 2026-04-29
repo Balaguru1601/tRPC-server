@@ -8,7 +8,15 @@ import { PrismaClient, User } from "@prisma/client";
 import { observable } from "@trpc/server/observable";
 import { isAuthenticatedUser } from "./middlewares";
 import { authTokenType, extractToken } from "../utils/extractToken";
-import { addUser, checkAndResetUser, onlineUsersKey, redis, removeUser } from "../redis";
+import {
+	addUser,
+	checkAndResetUser,
+	getOnlineUsers,
+	onlineUsersKey,
+	redis,
+	removeExpiredUsers,
+	removeUser,
+} from "../redis";
 import { eventEmitter } from "../constants/events";
 import {
 	AuthOutput,
@@ -79,6 +87,7 @@ export const userRouter = trpc.router({
 		.mutation(async ({ ctx, input }) => {
 			const { username, password, withUsername } = input;
 			try {
+				await removeExpiredUsers();
 				if (isExpressRequest(ctx)) {
 					let user: User | null = null;
 					if (withUsername)
@@ -175,34 +184,32 @@ export const userRouter = trpc.router({
 	}),
 
 	getOnlineUsers: isAuthenticatedUser.output(OnlineUsersOutput).query(async ({ ctx }) => {
-		const user = ctx.user;
-		const onlineUsers = await redis.smembers(onlineUsersKey, async (err, onlineUsers) => {
-			if (err) {
-				return { success: false, message: "Failed to get online users!" };
-			} else {
-				return onlineUsers;
+		try {
+			const user = ctx.user;
+			const onlineUsers = await getOnlineUsers();
+			if (onlineUsers && onlineUsers.length > 0) {
+				try {
+					const userIds: number[] = Array.from(onlineUsers, (x) => +x);
+					const users = await prisma.user.findMany({
+						where: {
+							id: { in: userIds, not: user.id },
+						},
+					});
+					prisma.individualMessage.updateMany({
+						where: {
+							recipientId: user.id,
+						},
+						data: {
+							receivedAt: new Date(),
+						},
+					});
+					return { success: true, message: "Successfully got online users!", users };
+				} catch (e) {
+					return { success: false, message: "Failed to get online users!" };
+				}
 			}
-		});
-		if (onlineUsers && onlineUsers.length > 0) {
-			try {
-				const userIds: number[] = Array.from(onlineUsers, (x) => +x);
-				const users = await prisma.user.findMany({
-					where: {
-						id: { in: userIds, not: user.id },
-					},
-				});
-				prisma.individualMessage.updateMany({
-					where: {
-						recipientId: user.id,
-					},
-					data: {
-						receivedAt: new Date(),
-					},
-				});
-				return { success: true, message: "Successfully got online users!", users };
-			} catch (e) {
-				return { success: false, message: "Failed to get online users!" };
-			}
+		} catch (error) {
+			console.log(error);
 		}
 		return { success: false, message: "Failed to get online users!" };
 	}),
