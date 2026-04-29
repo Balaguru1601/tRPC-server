@@ -40,7 +40,7 @@ export const messageRouter = trpc.router({
 					receivedAt?: string;
 				} = {
 					...input,
-					sentAt: new Date().toISOString(),
+					sentAt: input.sentAt ?? new Date().toISOString(),
 					senderId: user.id,
 					viewed: false,
 				};
@@ -136,7 +136,7 @@ export const messageRouter = trpc.router({
                             "senderId", "recipientId", "deletedAt", "deletedBy",
                             "deletionScope", "editedAt"
                         FROM "chatapp_individualmessage"
-                        WHERE "chatId" = ${chat.id}
+                        WHERE "chatId" = ${chat.id} AND ("deletedBy" IS NULL OR ("deletedBy" = ${user.id} AND "deletionScope" = 'SELF'))
                         ORDER BY "sentAt"
                         ) messages
                         GROUP BY DATE_TRUNC('day', ("sentAt" AT TIME ZONE 'Z'))

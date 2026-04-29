@@ -27,6 +27,7 @@ export const SendMessageInput = z.object({
 	chatId: z.string(),
 	senderId: z.number(),
 	recipientId: z.number(),
+	sentAt: z.string().optional(),
 });
 
 export const createChatInput = z.object({
